@@ -1,0 +1,8 @@
+{
+  "name": "tute-events-hub",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
