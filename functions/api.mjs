@@ -63,6 +63,8 @@ function merge(target, patch) {
   return target;
 }
 
+const slug = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+const rowId = (p) => slug(p.name) + "-" + (p.date || "tbc");
 const okPath = (p) => p === "state/shared" || p === "master/data" || /^events\/[A-Za-z0-9_-]{1,60}$/.test(p);
 
 export default async (req) => {
@@ -76,6 +78,54 @@ export default async (req) => {
   if (route === "login") return json({ role });
   if (route === "rev") return json({ rev: (await s.get("rev")) || "0" });
   if (route === "all") { const all = await loadAll(s); return json(role === "marketing" ? all : forTeam(all)); }
+
+  // ---- BD event requests (team or marketing) ----
+  if (route === "requests") {
+    const all = await loadAll(s);
+    const dec = (all.state && all.state.decide) || {}, ps = (all.state && all.state.pipeStatus) || {};
+    const out = ((all.master && all.master.REQUESTS) || []).map((r) => {
+      const id = rowId(r), d = dec[id] || {};
+      let status = ps[id] || r.status || "To decide", why = "";
+      if (d.d === "approved") status = "Approved";
+      else if (d.d === "declined" || (r.ruledOut && d.d !== "restored")) { status = "Declined"; why = d.why || r.ruledOutWhy || ""; }
+      return { name: r.name, date: r.date || "", dateNote: r.dateNote || "", bd: r.bd || "", location: r.location || "", status, why, submittedAt: r.submittedAt || "", submittedBy: r.submittedBy || "" };
+    });
+    return json({ requests: out });
+  }
+  if (route === "request") {
+    if (req.method !== "POST") return json({ error: "POST only" }, 405);
+    let b; try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
+    const t = (v, n) => String(v || "").trim().slice(0, n);
+    const name = t(b.name, 160), by = t(b.by, 10);
+    if (!name) return json({ error: "Add the event name." }, 400);
+    if (!by) return json({ error: "Pick your name." }, 400);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date || "") ? b.date : "";
+    const end = /^\d{4}-\d{2}-\d{2}$/.test(b.end || "") && b.end >= date ? b.end : "";
+    const deadline = /^\d{4}-\d{2}-\d{2}$/.test(b.deadline || "") ? b.deadline : "";
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const cur = await s.getWithMetadata("master/data", { type: "json" });
+      const m = cur && cur.data ? cur.data : {};
+      const P = m.PEOPLE || {}; const person = P[by];
+      if (!person) return json({ error: "Pick your name from the list." }, 400);
+      const reqs = (m.REQUESTS || []).slice();
+      if (reqs.some((r) => rowId(r) === rowId({ name, date }))) return json({ error: "That event has already been requested." }, 409);
+      const facts = [];
+      if (t(b.why, 1500)) facts.push("Why: " + t(b.why, 1500));
+      if (deadline) facts.push("Booking deadline: " + deadline);
+      facts.push("Requested by " + person.name + " on " + new Date().toISOString().slice(0, 10));
+      const rec = { name, date, link: t(b.link, 400), location: t(b.location, 120), region: t(b.region, 40), type: t(b.type, 40), audience: t(b.audience, 80),
+        cost: t(b.cost, 80) || null, bd: person.init || by.toUpperCase(), notes: t(b.why, 1500), status: "New request", facts,
+        contact: t(b.contact, 200), submittedBy: person.name, submittedAt: new Date().toISOString() };
+      if (end) rec.end = end;
+      if (deadline) rec.deadline = deadline;
+      if (!date) rec.dateNote = "Date TBC";
+      reqs.push(rec);
+      const next = Object.assign({}, m, { REQUESTS: reqs });
+      const res = await s.setJSON("master/data", next, cur && cur.etag ? { onlyIfMatch: cur.etag } : {});
+      if (!res || res.modified !== false) { await s.set("rev", String(Date.now())); return json({ ok: true }); }
+    }
+    return json({ error: "Busy, try again" }, 409);
+  }
 
   if (route === "export") {
     if (role !== "marketing") return json({ error: "Read-only login" }, 403);
