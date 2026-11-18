@@ -20,6 +20,25 @@
   function signOut() { auth = null; save(); location.href = location.pathname; }
   window.tuteSignOut = signOut;
 
+  // Upload an image or PDF; big photos are shrunk in the browser first. Resolves with the file's URL.
+  function shrink(file) {
+    return new Promise(function (res) {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type) || (file.type === 'image/png' && file.size < 1.5e6) || (file.size < 6e5)) return res(file);
+      var img = new Image(), u = URL.createObjectURL(file);
+      img.onload = function () { var k = Math.min(1, 1800 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+        c.toBlob(function (b) { res(b ? new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file); }, 'image/jpeg', 0.85); };
+      img.onerror = function () { res(file); }; img.src = u;
+    });
+  }
+  window.tuteUpload = function (file) {
+    if (!file) return Promise.reject(new Error('No file chosen'));
+    return shrink(file).then(function (f) {
+      return fetch('/api/upload', { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name || 'file'), 'x-tute-pass': auth ? auth.pass : '' }, body: f })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw new Error(j.error || 'Upload failed'); return j; }); });
+    });
+  };
+
   function call(route, body) {
     return fetch('/api/' + route, {
       method: body ? 'POST' : 'GET',
@@ -94,6 +113,10 @@
     '.tg .go{display:inline-block;margin-top:14px;font:600 14px Inter,Arial,sans-serif;background:#66FF94;color:#002E38;padding:10px 16px;border-radius:999px}'+
     '.tg .sec{font:700 11px Inter,Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#5B6F74;margin:0 0 10px 4px}.tg .ev2{display:flex;gap:14px;align-items:center;text-decoration:none;color:#002E38;background:#fff;border:1px solid rgba(0,46,56,.12);border-radius:16px;padding:14px 16px;margin-bottom:10px}.tg .ev2 .fm b{font-size:16px}'+
     '@media(max-width:560px){.tg .hero h1{font-size:30px}.tg .fr{flex-wrap:wrap}.tg .feat .cd{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.tg .ev2 .cd{display:none}}'+
+'.tg .fbi{margin:0 0 12px 4px;color:#2D4A51;font:400 14px/1.5 Inter,Arial,sans-serif}.tg .fbd{display:inline-block;margin-top:6px;font:600 11px Inter,Arial,sans-serif;background:#D6F7E1;color:#0B6433;border-radius:999px;padding:3px 9px}.tg .rqi>div{flex:1;min-width:0}.tg .fbb{width:auto!important;margin:0!important;flex-shrink:0;border:0;border-radius:999px;background:#002E38;color:#fff;font:600 13px Inter,Arial,sans-serif;padding:9px 14px;cursor:pointer}.tg .fbx{background:#fff!important;color:#002E38!important;border:1px solid rgba(0,46,56,.2)!important}.tg .fbq{margin:2px 0 4px;padding:10px 12px;border-radius:10px;background:#F7F0E8;font:400 12.5px/1.45 Inter,Arial,sans-serif;color:#2D4A51}.tg .fbh{margin:0 0 6px;font:400 15px/1.4 Inter,Arial,sans-serif}.tg .rqi small{display:block;color:#5B6F74;margin-top:3px}'+
+'.tg img.lgo{display:block;height:28px;width:auto;max-width:140px;object-fit:contain;margin-bottom:6px}.tg small.au{color:#2D4A51;font-weight:500}'+
+'.tg .go.off{background:rgba(0,46,56,.08);color:#5B6F74}.tg .ev2.off{background:rgba(255,255,255,.6);border-style:dashed;cursor:default}.tg div.feat{cursor:default}.tg .rdy,.tg .chs .cs{display:inline-block;font:600 11px Inter,Arial,sans-serif;border-radius:999px;padding:3px 9px;margin-left:6px}.tg .rdy{background:#66FF94;color:#002E38}.tg .chs .cs{background:#F3E9DC;color:#5B6F74;text-align:left}'+
+    '.tg .ev3{display:flex;gap:14px;align-items:center;background:rgba(255,255,255,.55);border:1px dashed rgba(0,46,56,.22);border-radius:16px;padding:12px 16px;margin-bottom:10px;color:#002E38}.tg .ev3 .fm b{font-size:15px}.tg .ev3 .dt{width:50px;height:54px}.tg .cs{flex-shrink:0;text-align:right;font:600 11.5px/1.3 Inter,Arial,sans-serif;color:#5B6F74}@media(max-width:560px){.tg .cs{display:none}}'+
     '.tg .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px}.tg .tabs button{width:auto;background:#fff;color:#002E38;border:1px solid rgba(0,46,56,.18);padding:10px 16px;font-size:14px}.tg .tabs button.on{background:#002E38;color:#fff;border-color:#002E38}' +
     '.tg select,.tg textarea{width:100%;box-sizing:border-box;font:500 15px Inter,Arial,sans-serif;padding:12px 13px;border:1px solid rgba(0,46,56,.25);border-radius:12px;margin-bottom:16px;color:#002E38;background:#fff}.tg textarea{resize:vertical}' +
     '.tg .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:520px){.tg .two{grid-template-columns:1fr}}.tg .bx{max-width:560px}' +
@@ -105,7 +128,7 @@
   function teamShell(cur, title, sub, inner) {
     var o = overlay('', true); o.classList.add('team-home');
     var today = new Date().toISOString().slice(0, 10);
-    var up = (cache.events || []).filter(function (e) { return String(e.end || e.start || '') >= today && (e.attendees || []).length; });
+    var up = (cache.events || []).filter(function (e) { return String(e.end || e.start || '') >= today && e.booking !== 'Cancelled' && !!e.briefShared; });
     o.querySelector('.bx').innerHTML = '<header class="hero"><img src="logo-white.png" alt="Tute Education" class="hl"><div class="ht"><h1>' + esc(title) + '</h1><p>' + esc(sub) + '</p></div>' +
       '<div class="hs"><span><b>' + up.length + '</b> upcoming</span><span class="dot"></span><span>Kept up to date by Marketing</span></div><span class="blob b1"></span><span class="blob b2"></span></header>' + tabsHtml(cur) + inner +
       '<button class="out" type="button" onclick="tuteSignOut()">Sign out</button>';
@@ -144,7 +167,7 @@
       .map(function (id) { return { id: id, name: P[id].name, init: P[id].init }; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
   }
   function tabsHtml(cur) {
-    var t = [['brief', 'Briefings'], ['request', 'Request an event'], ['mine', 'Requests']];
+    var t = [['brief', 'Upcoming events'], ['feedback', 'Event feedback'], ['request', 'Request an event'], ['mine', 'Requests']];
     return '<div class="tabs" role="tablist">' + t.map(function (x) { return '<button type="button" role="tab" data-tab="' + x[0] + '" class="' + (x[0] === cur ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>';
   }
   function wireTabs() { document.querySelectorAll('.tg .tabs button').forEach(function (b) { b.onclick = function () { teamHome(b.dataset.tab); }; }); }
@@ -153,8 +176,9 @@
     lsSet(TAB_KEY, tab);
     if (tab === 'request') return requestForm();
     if (tab === 'mine') return myRequests();
+    if (tab === 'feedback') return feedbackList();
     var today = new Date().toISOString().slice(0, 10);
-    var evs = (cache.events || []).filter(function (e) { return String(e.end || e.start || '') >= today && (e.attendees || []).length; })
+    var upAll = (cache.events || []).filter(function (e) { return String(e.end || e.start || '') >= today && e.booking !== 'Cancelled' && !!e.briefShared; })
       .sort(function (a, b) { return String(a.start).localeCompare(String(b.start)); });
     var P = (cache.master && cache.master.PEOPLE) || {};
     var dd = function (s) { var t = new Date(today + 'T12:00:00'), d = new Date(s + 'T12:00:00'); return Math.round((d - t) / 864e5); };
@@ -164,16 +188,20 @@
     var kind = function (e) { var st = e.stand || {}; return (e.type || 'Event') + (st.number && st.number !== 'n/a' ? ' · Stand ' + st.number : st.build ? ' · ' + st.build : ''); };
     var range = function (e) { var a = new Date(e.start + 'T12:00:00'), b = new Date((e.end || e.start) + 'T12:00:00'); var f = function (d, o) { return d.toLocaleDateString('en-GB', o); };
       return e.end && e.end !== e.start ? f(a, { weekday: 'short', day: 'numeric' }) + ' – ' + f(b, { weekday: 'short', day: 'numeric', month: 'short' }) : f(a, { weekday: 'long', day: 'numeric', month: 'long' }); };
+    var lg = function (e) { return e.logo ? '<img class="lgo" src="' + esc(e.logo) + '" alt="">' : ''; };
     var tile = function (e, big) { var d = new Date(e.start + 'T12:00:00'); return '<span class="dt' + (big ? ' big' : '') + '"><b>' + d.getDate() + '</b><i>' + d.toLocaleDateString('en-GB', { month: 'short' }) + '</i></span>'; };
+    var aud = function (e) { var t = [].concat(e.settings || [], e.phases || []); return t.length ? '<small class="au">' + esc(t.join(' · ')) + '</small>' : ''; };
     var html = '';
-    if (evs.length) {
-      var n = evs[0], l = left(n);
-      html += '<a class="feat" href="#brief-' + esc(n.id) + '" data-id="' + esc(n.id) + '"><span class="eb">Next up</span><div class="fr">' + tile(n, true) + '<div class="fm"><b>' + esc(n.name) + '</b><small>' + esc(range(n)) + ' · ' + esc(where(n)) + '</small><small>' + esc(kind(n)) + '</small><div class="chs">' + chips(n) + '</div></div>' +
-        '<div class="cd"><b>' + esc(l[0]) + '</b><i>' + esc(l[1]) + '</i></div></div><span class="go">Open briefing →</span></a>';
-      if (evs.length > 1) html += '<div class="sec">Coming up</div>';
-      html += evs.slice(1).map(function (e) { var l2 = left(e); return '<a class="ev2" href="#brief-' + esc(e.id) + '" data-id="' + esc(e.id) + '">' + tile(e) + '<div class="fm"><b>' + esc(e.name) + '</b><small>' + esc(range(e)) + ' · ' + esc(where(e)) + '</small><div class="chs">' + chips(e) + '<span class="ty">' + esc(e.type || 'Event') + '</span></div></div><div class="cd sm"><b>' + esc(l2[0]) + '</b><i>' + esc(l2[1]) + '</i></div></a>'; }).join('');
-    } else html = '<div class="card">No upcoming briefings yet.</div>';
-    teamShell('brief', 'Tute events', 'Your briefings for upcoming events, and a place to request new ones.', html);
+    var pill = function (e) { return e.briefShared ? '<span class="rdy">Briefing ready</span>' : '<span class="cs">Briefing coming soon</span>'; };
+    if (upAll.length) {
+      var n = upAll[0], l = left(n), nOn = !!n.briefShared;
+      html += (nOn ? '<a class="feat" href="#brief-' + esc(n.id) + '" data-id="' + esc(n.id) + '">' : '<div class="feat">') + '<span class="eb">Next up</span><div class="fr">' + tile(n, true) + '<div class="fm">' + lg(n) + '<b>' + esc(n.name) + '</b><small>' + esc(range(n)) + (where(n) ? ' · ' + esc(where(n)) : '') + '</small><small>' + esc(kind(n)) + '</small>' + aud(n) + '<div class="chs">' + chips(n) + '</div></div>' +
+        '<div class="cd"><b>' + esc(l[0]) + '</b><i>' + esc(l[1]) + '</i></div></div>' + (nOn ? '<span class="go">Open briefing →</span></a>' : '<span class="go off">Briefing coming soon</span></div>');
+      if (upAll.length > 1) html += '<div class="sec">Coming up</div>';
+      html += upAll.slice(1).map(function (e) { var l2 = left(e), on = !!e.briefShared;
+        return (on ? '<a class="ev2" href="#brief-' + esc(e.id) + '" data-id="' + esc(e.id) + '">' : '<div class="ev2 off">') + tile(e) + '<div class="fm">' + lg(e) + '<b>' + esc(e.name) + '</b><small>' + esc(range(e)) + (where(e) ? ' · ' + esc(where(e)) : '') + '</small>' + aud(e) + '<div class="chs">' + chips(e) + '<span class="ty">' + esc(e.type || 'Event') + '</span>' + pill(e) + '</div></div><div class="cd sm"><b>' + esc(l2[0]) + '</b><i>' + esc(l2[1]) + '</i></div>' + (on ? '</a>' : '</div>'); }).join('');
+    } else html = '<div class="card">No upcoming events yet.</div>';
+    teamShell('brief', 'Tute events', 'Everything we’re booked to attend. Open a briefing once it’s ready, or request a new event.', html);
     wireTabs();
     document.querySelectorAll('.tg a.feat, .tg a.ev2').forEach(function (a) { a.onclick = function (ev) { ev.preventDefault(); location.hash = 'brief-' + a.dataset.id; location.reload(); }; });
   }
@@ -205,6 +233,60 @@
         .catch(function (e) { btn.disabled = false; btn.textContent = 'Send to Marketing'; err.textContent = e.message || 'Couldn’t send that. Try again.'; });
     });
   }
+  // ---- Post-event feedback from the BD team ----
+  function recentEvents() {
+    var today = new Date().toISOString().slice(0, 10), from = new Date(Date.now() - 75 * 864e5).toISOString().slice(0, 10);
+    return (cache.events || []).filter(function (e) { return e.start && e.start <= today && String(e.end || e.start) >= from && e.booking !== 'Cancelled'; })
+      .sort(function (a, b) { return String(b.start).localeCompare(String(a.start)); });
+  }
+  function fbDate(e) { var d = new Date(e.start + 'T12:00:00'); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
+  function feedbackList(flash) {
+    var me = lsGet(ME_KEY), list = recentEvents();
+    var html = (flash ? '<div class="ok" role="status">' + esc(flash) + '</div>' : '') +
+      '<p class="fbi">Been at one of these? Tell Marketing how it went. It takes two minutes and feeds the event results.</p>' +
+      (list.length ? list.map(function (e) { var done = me && (e.feedbackBy || []).indexOf(me) >= 0;
+        return '<div class="rqi"><div><b>' + esc(e.name) + '</b><small>' + esc(fbDate(e)) + (e.venue ? ' · ' + esc(e.venue) : '') + '</small>' + (done ? '<span class="fbd">Your feedback is in</span>' : '') + '</div>' +
+          '<button type="button" class="fbb" data-id="' + esc(e.id) + '">' + (done ? 'Update' : 'Give feedback') + '</button></div>'; }).join('')
+        : '<div class="card">No recent events to give feedback on. Events appear here from their first day for about ten weeks.</div>');
+    teamShell('feedback', 'Event feedback', 'How did it go? Your answers fill in the event results for Marketing.', html);
+    wireTabs();
+    document.querySelectorAll('.tg .fbb').forEach(function (b) { b.onclick = function () { feedbackForm(b.dataset.id); }; });
+  }
+  function feedbackForm(id) {
+    var e = (cache.events || []).filter(function (x) { return x.id === id; })[0]; if (!e) return feedbackList();
+    var me = lsGet(ME_KEY), ppl = bdPeople();
+    var opt = function (arr, cur) { return arr.map(function (x) { var v = typeof x === 'string' ? x : x[0], l = typeof x === 'string' ? x : x[1]; return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join(''); };
+    var n = function (id2, label, ph) { return '<div><label for="' + id2 + '">' + label + '</label><input id="' + id2 + '" inputmode="numeric" placeholder="' + (ph || '0') + '"></div>'; };
+    var sel = function (id2, label, arr) { return '<div><label for="' + id2 + '">' + label + '</label><select id="' + id2 + '"><option value=""></option>' + opt(arr) + '</select></div>'; };
+    var html = '<div class="card"><form class="rq fb"><p class="fbh"><b>' + esc(e.name) + '</b> · ' + esc(fbDate(e)) + '</p>' +
+      '<label for="fb-by">Your name *</label><select id="fb-by" required><option value="">Choose…</option>' + opt(ppl.map(function (p) { return [p.id, p.name]; }), me) + '</select>' +
+      '<div class="two">' + sel('fb-rating', 'Overall, how was it? *', [['5', '5 · Excellent'], ['4', '4 · Good'], ['3', '3 · OK'], ['2', '2 · Poor'], ['1', '1 · Waste of time']]) + sel('fb-rebook', 'Should we go again? *', ['Yes', 'Maybe', 'No']) + '</div>' +
+      '<div class="two">' + sel('fb-aud', 'Were the right people there?', ['Right people', 'Mixed', 'Mostly not our audience']) + sel('fb-foot', 'How busy was it?', ['Busy', 'Steady', 'Quiet']) + '</div>' +
+      '<div class="two">' + n('fb-conv', 'Conversations (roughly)') + n('fb-leads', 'All leads you collected *') + '</div>' +
+      '<div class="two">' + n('fb-hot', 'Of those, qualified leads (MQLs)') + n('fb-meet', 'Meetings booked') + '</div>' +
+      '<div class="two">' + n('fb-opps', 'Likely opportunities') + sel('fb-d365', 'Leads in D365?', ['All added', 'Some added', 'Not yet']) + '</div>' +
+      '<p class="fbq">All leads = everyone you captured, qualified or not. A qualified lead (MQL) is the right role, has a real need and is happy to be followed up.</p><label for="fb-names">Who were the best leads?</label><textarea id="fb-names" rows="3" placeholder="Name · school or LA · role · what they need"></textarea>' +
+      '<label for="fb-worked">What worked well?</label><textarea id="fb-worked" rows="3" placeholder="Conversations, sessions, the stand, timing…"></textarea>' +
+      '<label for="fb-improve">What should we do differently?</label><textarea id="fb-improve" rows="3"></textarea>' +
+      '<label for="fb-comp">Competitors you saw</label><input id="fb-comp" placeholder="Who, and anything notable">' +
+      '<label for="fb-kit">Stand, kit and merch</label><input id="fb-kit" placeholder="Anything missing, too much or too little?">' +
+      '<button type="submit">Send feedback</button> <button type="button" class="fbx">Cancel</button><div class="err" role="alert"></div></form></div>';
+    teamShell('feedback', 'Event feedback', 'How did it go? Your answers fill in the event results for Marketing.', html);
+    wireTabs();
+    var f = document.querySelector('.tg form.fb'), err = f.querySelector('.err'), btn = f.querySelector('button[type=submit]');
+    f.querySelector('.fbx').onclick = function () { feedbackList(); };
+    f.addEventListener('submit', function (ev) {
+      ev.preventDefault(); err.textContent = '';
+      var g = function (x) { return (document.getElementById(x).value || '').trim(); };
+      var body = { eventId: e.id, by: g('fb-by'), rating: g('fb-rating'), rebook: g('fb-rebook'), audience: g('fb-aud'), footfall: g('fb-foot'), conversations: g('fb-conv'), leads: g('fb-leads'), hot: g('fb-hot'), meetings: g('fb-meet'), opps: g('fb-opps'), d365: g('fb-d365'), leadNames: g('fb-names'), worked: g('fb-worked'), improve: g('fb-improve'), competitors: g('fb-comp'), kit: g('fb-kit') };
+      if (!body.by) { err.textContent = 'Pick your name.'; return; }
+      if (!body.rating || !body.rebook) { err.textContent = 'Give it a rating and say whether we should go again.'; return; }
+      if (body.leads === '') { err.textContent = 'Add how many leads you collected (0 is fine).'; return; }
+      lsSet(ME_KEY, body.by); btn.disabled = true; btn.textContent = 'Sending…';
+      call('feedback', body).then(function () { return refresh().catch(function () {}); }).then(function () { feedbackList('Thanks, your feedback has gone to Marketing.'); })
+        .catch(function (x) { btn.disabled = false; btn.textContent = 'Send feedback'; err.textContent = x.message || 'Couldn’t send that. Try again.'; });
+    });
+  }
   function myRequests(flash) {
     teamShell('mine', 'Requests', 'Events the BD team has asked for, and what Marketing decided.', (flash ? '<div class="ok" role="status">' + esc(flash) + '</div>' : '') + '<div class="card">Loading…</div>');
     wireTabs();
@@ -230,7 +312,8 @@
     if (auth.role === 'team') document.documentElement.classList.add('team');
     refresh().then(function () {
       readyResolve();
-      if (auth.role === 'team' && !/^#brief-/.test(location.hash)) picker(); else closeOverlay();
+      var bid = (location.hash.match(/^#brief-(.+)$/) || [])[1]; var bev = bid && (cache.events || []).filter(function (e) { return e.id === bid; })[0];
+      if (auth.role === 'team' && (!bid || !bev || !bev.briefShared)) { if (bid) history.replaceState(null, '', location.pathname); picker(); } else closeOverlay();
       setInterval(poll, 20000);
       document.addEventListener('visibilitychange', poll);
     }).catch(function (e) { if (e.status === 401) return; overlay('<h1>Couldn’t load</h1><p>' + esc(e.message || 'Check your connection and refresh the page.') + '</p><button type="button" onclick="location.reload()">Try again</button><button class="out" type="button" onclick="tuteSignOut()">Sign out</button>'); });
@@ -519,15 +602,16 @@ body{background:var(--bg);color:var(--fg)}
 <div class="pagepad" style="padding: 44px 48px 64px">
   <div style="font: 600 12px/1 Inter, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #C21F62; margin-bottom: 16px">Shared record</div>
   <h1 class="gruffy" style="font-weight: 600; font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 12px">Merchandise stock</h1>
-  <p style="font: 400 16px/1.6 Inter, sans-serif; color: #5B6F74; max-width: 680px; margin: 0 0 28px">Stock levels are entered once here. Each event only records how many it takes, so remaining stock updates everywhere automatically. Total stock figures are placeholders until you send the real counts.</p>
+  <p style="font: 400 16px/1.6 Inter, sans-serif; color: #5B6F74; max-width: 680px; margin: 0 0 28px">{{merchIntro}}</p>
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px"><sc-for list="{{merchTabs}}" as="tb" hint-placeholder-count="2"><button type="button" data-on-click="{{tb.pick}}" style="border: 1px solid rgba(0,46,56,0.16); border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; background: {{tb.bg}}; color: {{tb.fg}}">{{tb.label}} <span style="opacity: 0.7">({{tb.n}})</span></button></sc-for></div>
   <div class="card" style="overflow: hidden">
-    <div style="display: grid; grid-template-columns: 1.5fr 0.7fr repeat(6, minmax(0, 0.8fr)) 0.8fr 0.8fr 0.9fr; gap: 10px; padding: 14px 20px; background: #F7F0E8; align-items: end">
+    <div style="display: grid; grid-template-columns: {{merchCols}}; gap: 10px; padding: 14px 20px; background: #F7F0E8; align-items: end">
       <span class="th">Item</span><span class="th">Total</span>
       <sc-for list="{{merchHead}}" as="h" hint-placeholder-count="6"><span class="th" style="letter-spacing: 0.04em; text-transform: none; font-size: 11.5px">{{h.short}}</span></sc-for>
-      <span class="th">Allocated</span><span class="th">Remaining</span><span class="th">Status</span>
+      <span class="th">Allocated (all terms)</span><span class="th">Remaining</span><span class="th">Status</span>
     </div>
     <sc-for list="{{merchRows}}" as="m" hint-placeholder-count="4">
-      <div style="display: grid; grid-template-columns: 1.5fr 0.7fr repeat(6, minmax(0, 0.8fr)) 0.8fr 0.8fr 0.9fr; gap: 10px; padding: 16px 20px; border-top: 1px solid rgba(0,46,56,0.08); align-items: center; font: 500 14px/1.3 Inter, sans-serif">
+      <div style="display: grid; grid-template-columns: {{merchCols}}; gap: 10px; padding: 16px 20px; border-top: 1px solid rgba(0,46,56,0.08); align-items: center; font: 500 14px/1.3 Inter, sans-serif">
         <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{m.name}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{m.location}}</span></span>
         <span>{{m.total}}</span>
         <sc-for list="{{m.perEvent}}" as="x" hint-placeholder-count="6"><span style="color: #5B6F74">{{x.v}}</span></sc-for>
@@ -536,6 +620,22 @@ body{background:var(--bg);color:var(--fg)}
         <span style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start"><span class="pill" style="background: {{m.stockPill.bg}}; color: {{m.stockPill.fg}}">{{m.stockLabel}}</span><sc-if value="{{m.canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{m.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span>
       </div>
     </sc-for>
+  </div>
+  <div class="card" style="padding: 22px 24px; margin-top: 18px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap"><span style="display: flex; flex-direction: column; gap: 4px"><span class="eyebrow">Where the stock is</span><span style="font: 400 12.5px/1.4 Inter, sans-serif; color: #5B6F74">What’s physically in the office, with each BD and with suppliers. Totals above add these up.</span></span>
+      <sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><span style="display: flex; gap: 8px; flex-wrap: wrap"><button type="button" data-on-click="{{stockIn}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">New stock arrived</button><button type="button" data-on-click="{{stockMove}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 8px 13px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">Move stock</button><button type="button" data-on-click="{{stockAddHolder}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 8px 13px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">+ Add person or place</button></span></sc-if></div>
+    <sc-if value="{{noStock}}" hint-placeholder-val="{{ false }}"><div style="font: 400 13.5px/1.45 Inter, sans-serif; color: #5B6F74">Not set up yet. Add the office and anyone holding stock, then enter their counts.</div></sc-if>
+    <sc-if value="{{hasStock}}" hint-placeholder-val="{{ true }}">
+    <div style="overflow-x: auto"><div style="min-width: 640px">
+      <div style="display: grid; grid-template-columns: 1.6fr repeat(3, minmax(0, 0.7fr)) 2fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(0,46,56,0.1)"><span class="th">Who or where</span><sc-for list="{{stockHead}}" as="h" hint-placeholder-count="3"><span class="th">{{h.name}}</span></sc-for><span class="th"></span></div>
+      <sc-for list="{{stockRows}}" as="r" hint-placeholder-count="3"><div style="display: grid; grid-template-columns: 1.6fr repeat(3, minmax(0, 0.7fr)) 2fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid rgba(0,46,56,0.06); align-items: center; font: 500 14px/1.3 Inter, sans-serif">
+        <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">{{r.name}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{r.note}}</span></span>
+        <sc-for list="{{r.counts}}" as="c" hint-placeholder-count="3"><span>{{c.v}}</span></sc-for>
+        <span style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end"><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{r.count}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 8px 13px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">Update count</button><button type="button" data-on-click="{{r.use}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 8px 13px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">Used</button></sc-if><sc-if value="{{r.canReturn}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{r.giveBack}}" style="border: 0; background: #66FF94; color: #002E38; border-radius: 999px; padding: 8px 13px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">Returned to office</button></sc-if></span>
+      </div></sc-for>
+    </div></div>
+    <sc-if value="{{hasStockLog}}" hint-placeholder-val="{{ false }}"><div style="display: flex; flex-direction: column; gap: 6px"><span class="th">Recent moves</span><sc-for list="{{stockLog}}" as="l" hint-placeholder-count="3"><span style="font: 400 12.5px/1.4 Inter, sans-serif; color: #2D4A51"><span style="color: #5B6F74">{{l.when}}</span> · {{l.what}}</span></sc-for></div></sc-if>
+    </sc-if>
   </div>
 </div>
 </sc-if>
@@ -580,7 +680,7 @@ body{background:var(--bg);color:var(--fg)}
     <sc-for list="{{pipeTabs}}" as="t" hint-placeholder-count="4"><button type="button" role="tab" data-on-click="{{t.pick}}" style="border: 1px solid rgba(0,46,56,0.16); border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; background: {{t.bg}}; color: {{t.fg}}; display: flex; gap: 7px; align-items: center">{{t.label}}<span style="opacity: 0.7; font-weight: 500">{{t.n}}</span></button></sc-for>
   </div>
   <sc-if value="{{notArchive}}" hint-placeholder-val="{{ true }}">
-  <div style="display: flex; align-items: baseline; justify-content: space-between; margin: 8px 0 12px"><h2 style="font: 600 19px/1.2 Inter, sans-serif; margin: 0">Events to decide</h2><span style="font: 400 13px/1.3 Inter, sans-serif; color: #5B6F74">From the events tracker</span></div>
+  <div style="display: flex; align-items: baseline; justify-content: space-between; margin: 8px 0 12px"><h2 style="font: 600 19px/1.2 Inter, sans-serif; margin: 0">Events to decide</h2><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{addPipe}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">+ Add an event</button></sc-if></div>
   <div class="card" style="overflow: hidden; margin-bottom: 28px">
     <div style="display: grid; grid-template-columns: 3fr 1.2fr 1.2fr 0.8fr 1.3fr; gap: 12px; padding: 14px 20px; background: #F7F0E8">
       <span class="th">Event</span><span class="th">Date</span><span class="th">BD</span><span class="th">Cost</span><span class="th">Status</span>
@@ -591,7 +691,7 @@ body{background:var(--bg);color:var(--fg)}
         <span>{{p.when}}</span>
         <span style="font-weight: 600">{{p.bd}}</span>
         <span>{{p.cost}}</span>
-        <span style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start"><sc-if value="{{p.isUrgent}}" hint-placeholder-val="{{ false }}"><span class="pill" style="background: #E0367C; color: #FFFFFF">Decide now</span></sc-if><button type="button" class="pill" data-on-click="{{p.toggleStatus}}" title="Change status" style="border: 0; gap: 5px; background: {{p.st.bg}}; color: {{p.st.fg}}">{{p.st.label}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button><sc-if value="{{p.statusOpen}}" hint-placeholder-val="{{ false }}"><span role="menu" style="display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #FFFFFF; border: 1px solid rgba(0,46,56,0.14); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,46,56,0.12)"><sc-for list="{{p.statusOpts}}" as="o" hint-placeholder-count="4"><button type="button" role="menuitem" data-on-click="{{o.pick}}" style="text-align: left; border: 1px solid {{o.bd}}; background: {{o.bg}}; color: {{o.fg}}; border-radius: 999px; padding: 6px 11px; font: 600 11.5px/1 Inter, sans-serif; white-space: nowrap">{{o.label}}</button></sc-for></span></sc-if><button type="button" data-on-click="{{p.sc.toggle}}" aria-label="Assess this event" style="border: 1px solid rgba(0,46,56,0.18); background: {{p.sc.btnBg}}; color: {{p.sc.btnFg}}; border-radius: 999px; padding: 5px 10px; font: 600 11.5px/1 Inter, sans-serif; white-space: nowrap">{{p.sc.btn}}</button><sc-if value="{{p.canAct}}" hint-placeholder-val="{{ true }}"><span style="display: flex; gap: 6px"><button type="button" data-on-click="{{p.act.startApprove}}" style="border: 0; background: #66FF94; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 700 11.5px/1 Inter, sans-serif">Approve</button><button type="button" data-on-click="{{p.act.startDecline}}" style="border: 1px solid rgba(149,31,81,0.35); background: #FFFFFF; color: #951F51; border-radius: 999px; padding: 5px 10px; font: 600 11.5px/1 Inter, sans-serif">Decline</button></span></sc-if></span>
+        <span style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start"><sc-if value="{{p.isUrgent}}" hint-placeholder-val="{{ false }}"><span class="pill" style="background: #E0367C; color: #FFFFFF">Decide now</span></sc-if><button type="button" class="pill" data-on-click="{{p.toggleStatus}}" title="Change status" style="border: 0; gap: 5px; background: {{p.st.bg}}; color: {{p.st.fg}}">{{p.st.label}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button><sc-if value="{{p.statusOpen}}" hint-placeholder-val="{{ false }}"><span role="menu" style="display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #FFFFFF; border: 1px solid rgba(0,46,56,0.14); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,46,56,0.12)"><sc-for list="{{p.statusOpts}}" as="o" hint-placeholder-count="4"><button type="button" role="menuitem" data-on-click="{{o.pick}}" style="text-align: left; border: 1px solid {{o.bd}}; background: {{o.bg}}; color: {{o.fg}}; border-radius: 999px; padding: 6px 11px; font: 600 11.5px/1 Inter, sans-serif; white-space: nowrap">{{o.label}}</button></sc-for></span></sc-if><button type="button" data-on-click="{{p.sc.toggle}}" aria-label="Assess this event" style="border: 1px solid rgba(0,46,56,0.18); background: {{p.sc.btnBg}}; color: {{p.sc.btnFg}}; border-radius: 999px; padding: 5px 10px; font: 600 11.5px/1 Inter, sans-serif; white-space: nowrap">{{p.sc.btn}}</button><sc-if value="{{p.canAct}}" hint-placeholder-val="{{ true }}"><span style="display: flex; gap: 6px"><button type="button" data-on-click="{{p.act.startApprove}}" style="border: 0; background: #66FF94; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 700 11.5px/1 Inter, sans-serif">Approve</button><button type="button" data-on-click="{{p.act.startDecline}}" style="border: 1px solid rgba(149,31,81,0.35); background: #FFFFFF; color: #951F51; border-radius: 999px; padding: 5px 10px; font: 600 11.5px/1 Inter, sans-serif">Decline</button><button type="button" data-on-click="{{p.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 5px 10px; font: 600 11.5px/1 Inter, sans-serif">Edit</button></span></sc-if></span>
       </div>
       <sc-if value="{{p.act.open}}" hint-placeholder-val="{{ false }}">
         <div style="margin: 0 20px 18px; padding: 16px 18px; border-radius: 14px; background: #F7F0E8; border: 1px solid rgba(0,46,56,0.12); display: flex; flex-direction: column; gap: 10px">
@@ -785,7 +885,7 @@ body{background:var(--bg);color:var(--fg)}
   <div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; align-items: start">
     <div style="display: flex; flex-direction: column; gap: 18px">
       <div class="card" style="padding: 24px">
-        <div class="eyebrow" style="margin-bottom: 12px">Event summary</div>
+        <div style="margin-bottom: 12px"><div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap"><span class="eyebrow">Event summary</span><span style="display: flex; gap: 8px; align-items: center"><sc-if value="{{secs.about.hasMissing}}" hint-placeholder-val="{{ false }}"><span class="pill" title="{{secs.about.list}}" style="background: #FBD9E6; color: #951F51">{{secs.about.missingL}}</span></sc-if><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.about.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span></div></div>
         <p style="font: 400 15px/1.6 Inter, sans-serif; margin: 0 0 18px">{{ev.summary}}</p>
         <div class="th" style="margin-bottom: 8px">Event objective</div>
         <p style="font: 600 15px/1.5 Inter, sans-serif; margin: 0 0 12px">{{ev.objective}}</p>
@@ -799,8 +899,32 @@ body{background:var(--bg);color:var(--fg)}
           <sc-for list="{{details}}" as="r" hint-placeholder-count="10"><div style="display: flex; flex-direction: column; gap: 5px; padding: 12px 0; border-top: 1px solid rgba(0,46,56,0.08)"><div style="display: flex; align-items: center; gap: 8px"><span class="th">{{r.k}}</span><sc-if value="{{r.brief}}" hint-placeholder-val="{{ false }}"><span class="btag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path></svg>Briefing</span></sc-if></div><sc-if value="{{r.ok}}" hint-placeholder-val="{{ true }}"><div style="font: 500 14.5px/1.45 Inter, sans-serif; color: #002E38">{{r.v}}</div></sc-if><sc-if value="{{r.missing}}" hint-placeholder-val="{{ false }}"><div style="font: 600 14px/1.45 Inter, sans-serif; color: #C21F62; display: flex; gap: 6px; align-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>{{r.v}}</div></sc-if><sc-if value="{{r.hasExtra}}" hint-placeholder-val="{{ false }}"><div style="font: 400 12px/1.3 Inter, sans-serif; color: #5B6F74">{{r.extra}}</div></sc-if></div></sc-for>
         </div>
       </div>
+      <div class="card" style="padding: 20px 24px 12px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px"><span class="eyebrow">Event contacts</span><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{addContact}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 7px 12px; font: 600 12px/1 Inter, sans-serif; white-space: nowrap">+ Add contact</button></sc-if></div>
+        <sc-for list="{{contactRows}}" as="ct" hint-placeholder-count="3"><div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px 0; border-top: 1px solid rgba(0,46,56,0.08)">
+          <span style="display: flex; flex-direction: column; gap: 5px"><span class="th" style="color: #5B6F74">{{ct.role}}</span><span class="pill" style="align-self: flex-start; height: 19px; font-size: 10.5px; background: {{ct.briefBg}}; color: #0B5560">{{ct.briefL}}</span></span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0; font: 400 13px/1.4 Inter, sans-serif"><span style="font: 600 14px/1.3 Inter, sans-serif">{{ct.name}}</span><span style="color: #5B6F74">{{ct.org}}</span><sc-if value="{{ct.hasEmail}}" hint-placeholder-val="{{ true }}"><a href="{{ct.mail}}" style="color: #002E38; overflow-wrap: anywhere">{{ct.email}}</a></sc-if><span>{{ct.phone}}</span><span style="color: #5B6F74">{{ct.note}}</span></span>
+          <sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{ct.edit}}" style="border: 0; background: transparent; color: #002E38; font: 600 12px/1 Inter, sans-serif; padding: 4px">Edit</button></sc-if>
+        </div></sc-for>
+        <sc-if value="{{noContacts}}" hint-placeholder-val="{{ false }}"><div style="padding: 10px 0; border-top: 1px solid rgba(0,46,56,0.08); font: 400 13px/1.45 Inter, sans-serif; color: #5B6F74">Organiser, account manager, operations, finance, contractor and venue: everyone for this event in one place. Mark who attendees should see in their briefing.</div></sc-if>
+      </div>
     </div>
     <div style="display: flex; flex-direction: column; gap: 18px">
+      <div class="card" style="padding: 20px 22px 10px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px"><span class="eyebrow">Event record</span><span style="font: 600 12px/1 Inter, sans-serif; color: #5B6F74">{{recDone}}</span></div>
+        <sc-for list="{{secList}}" as="r" hint-placeholder-count="7"><button type="button" data-on-click="{{r.edit}}" title="{{r.list}}" style="width: 100%; border: 0; border-top: 1px solid rgba(0,46,56,0.08); background: transparent; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; color: #002E38"><span style="display: flex; flex-direction: column; gap: 3px; min-width: 0"><span style="font: 600 13.5px/1.25 Inter, sans-serif">{{r.label}}</span><span style="font: 400 11.5px/1.3 Inter, sans-serif; color: #5B6F74">{{r.list}}</span></span><span class="pill" style="flex-shrink: 0; background: {{r.bg}}; color: {{r.fg}}">{{r.statusL}}</span></button></sc-for>
+      </div>
+      <div class="card" style="padding: 20px 22px 12px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px"><span class="eyebrow">Images and files</span><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{addFile}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 7px 12px; font: 600 12px/1 Inter, sans-serif; white-space: nowrap">+ Upload</button></sc-if></div>
+        <sc-if value="{{hasLogo}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(0,46,56,0.08)"><img src="{{logo}}" alt="Event logo" style="height: 34px; max-width: 120px; object-fit: contain"><span style="font: 500 12.5px/1.3 Inter, sans-serif; color: #5B6F74">Event logo · change it in Event summary → Edit</span></div></sc-if>
+        <sc-for list="{{fileRows}}" as="fl" hint-placeholder-count="2"><div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(0,46,56,0.08)">
+          <sc-if value="{{fl.isImg}}" hint-placeholder-val="{{ true }}"><img src="{{fl.url}}" alt="" style="width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0,46,56,0.1); flex-shrink: 0"></sc-if>
+          <sc-if value="{{fl.isDoc}}" hint-placeholder-val="{{ false }}"><span style="width: 44px; height: 44px; border-radius: 8px; background: #F3E9DC; display: flex; align-items: center; justify-content: center; font: 700 10.5px/1 Inter, sans-serif; color: #5B6F74; flex-shrink: 0">PDF</span></sc-if>
+          <span style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex-grow: 1"><a href="{{fl.url}}" target="_blank" rel="noopener" style="font: 600 13.5px/1.25 Inter, sans-serif; color: #002E38">{{fl.label}}</a><span class="pill" style="align-self: flex-start; height: 19px; font-size: 10.5px; background: {{fl.briefBg}}; color: #0B5560">{{fl.briefL}}</span></span>
+          <sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{fl.edit}}" style="border: 0; background: transparent; color: #002E38; font: 600 12px/1 Inter, sans-serif; padding: 4px">Edit</button></sc-if>
+        </div></sc-for>
+        <sc-if value="{{noFiles}}" hint-placeholder-val="{{ false }}"><div style="padding: 10px 0; border-top: 1px solid rgba(0,46,56,0.08); font: 400 12.5px/1.45 Inter, sans-serif; color: #5B6F74">Timetables, floorplans, parking maps, photos. Anything marked “In briefing” shows to attendees.</div></sc-if>
+      </div>
       <sc-if value="{{hasLast}}" hint-placeholder-val="{{ true }}">
       <div style="background: #002E38; color: #FFFFFF; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 14px">
         <div style="display: flex; justify-content: space-between; align-items: center"><span style="font: 600 11px/1 Inter, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #66FF94">Last time · {{last.date}}</span><span class="pill" style="background: {{last.rebook.bg}}; color: {{last.rebook.fg}}">Re-book: {{last.rebook.label}}</span></div>
@@ -856,7 +980,7 @@ body{background:var(--bg);color:var(--fg)}
           <span>{{a.days}}</span>
           <span><span class="pill" style="background: {{a.badgeP.bg}}; color: {{a.badgeP.fg}}">{{a.badgeP.label}}</span></span>
           <span style="display: flex; flex-direction: column; gap: 3px"><span class="pill" style="align-self: flex-start; background: {{a.travelP.bg}}; color: {{a.travelP.fg}}">{{a.travelP.label}}</span><span style="font: 400 11.5px/1.2 Inter, sans-serif; color: #5B6F74">Claimed on expenses</span></span>
-          <span style="display: flex; flex-direction: column; gap: 4px; color: #5B6F74; font-weight: 400">{{a.notes}}<sc-if value="{{a.scanner}}" hint-placeholder-val="{{ true }}"><span class="btag" style="align-self: flex-start">SmartScan access</span></sc-if><sc-if value="{{a.canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{a.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; align-self: flex-start"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span>
+          <span style="display: flex; flex-direction: column; gap: 4px; color: #5B6F74; font-weight: 400">{{a.notes}}<sc-if value="{{a.scanner}}" hint-placeholder-val="{{ true }}"><span class="btag" style="align-self: flex-start">Badge scanner access</span></sc-if><sc-if value="{{a.canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{a.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; align-self: flex-start"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span>
         </div>
       </sc-for>
       <sc-if value="{{noAttendees}}" hint-placeholder-val="{{ false }}"><div style="padding: 28px 20px; border-top: 1px solid rgba(0,46,56,0.08); color: #5B6F74; font: 400 14px/1.4 Inter, sans-serif">No attendees added yet. Pick people from the People directory - names, roles and mobiles fill in automatically.</div></sc-if>
@@ -869,6 +993,7 @@ body{background:var(--bg);color:var(--fg)}
   <sc-if value="{{tab.logistics}}" hint-placeholder-val="{{ false }}">
   <sc-if value="{{noLogi}}" hint-placeholder-val="{{ false }}"><div class="card" style="padding: 28px; color: #5B6F74; font: 400 14px/1.5 Inter, sans-serif">Logistics not started for this event yet. Use Tes SEND London as the template.</div></sc-if>
   <sc-if value="{{hasLogi}}" hint-placeholder-val="{{ true }}">
+  <div class="card" style="padding: 14px 20px"><div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap"><span class="eyebrow">Logistics</span><span style="display: flex; gap: 8px; align-items: center"><sc-if value="{{secs.logistics.hasMissing}}" hint-placeholder-val="{{ false }}"><span class="pill" title="{{secs.logistics.list}}" style="background: #FBD9E6; color: #951F51">{{secs.logistics.missingL}}</span></sc-if><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.logistics.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span></div></div>
   <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start">
     <sc-for list="{{logi}}" as="g" hint-placeholder-count="4">
       <div class="card" style="padding: 8px 24px 12px">
@@ -884,7 +1009,7 @@ body{background:var(--bg);color:var(--fg)}
   <sc-if value="{{tab.stand}}" hint-placeholder-val="{{ false }}">
   <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start">
     <div class="card" style="padding: 8px 24px 12px">
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0 4px"><span class="eyebrow">{{standLabel}} details</span><sc-if value="{{showSignoff}}" hint-placeholder-val="{{ true }}"><span class="pill" style="background: {{signP.bg}}; color: {{signP.fg}}">{{signP.label}}</span></sc-if></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0 4px"><span class="eyebrow">{{standLabel}} details</span><span style="display: flex; gap: 8px; align-items: center"><sc-if value="{{showSignoff}}" hint-placeholder-val="{{ true }}"><span class="pill" style="background: {{signP.bg}}; color: {{signP.fg}}">{{signP.label}}</span></sc-if><sc-if value="{{secs.stand.hasMissing}}" hint-placeholder-val="{{ false }}"><span class="pill" title="{{secs.stand.list}}" style="background: #FBD9E6; color: #951F51">{{secs.stand.missingL}}</span></sc-if><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.stand.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span></div>
       <sc-for list="{{standKv}}" as="r" hint-placeholder-count="5"><div style="display: flex; flex-direction: column; gap: 5px; padding: 12px 0; border-top: 1px solid rgba(0,46,56,0.08)"><div style="display: flex; align-items: center; gap: 8px"><span class="th">{{r.k}}</span><sc-if value="{{r.brief}}" hint-placeholder-val="{{ false }}"><span class="btag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path></svg>Briefing</span></sc-if></div><sc-if value="{{r.ok}}" hint-placeholder-val="{{ true }}"><div style="font: 500 14.5px/1.45 Inter, sans-serif; color: #002E38">{{r.v}}</div></sc-if><sc-if value="{{r.missing}}" hint-placeholder-val="{{ false }}"><div style="font: 600 14px/1.45 Inter, sans-serif; color: #C21F62; display: flex; gap: 6px; align-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>{{r.v}}</div></sc-if><sc-if value="{{r.hasExtra}}" hint-placeholder-val="{{ false }}"><div style="font: 400 12px/1.3 Inter, sans-serif; color: #5B6F74">{{r.extra}}</div></sc-if></div></sc-for>
       <sc-if value="{{hasFloorplan}}" hint-placeholder-val="{{ true }}"><div style="display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid rgba(0,46,56,0.08)"><a href="{{floorplan}}" target="_blank" rel="noopener" style="font: 600 13.5px/1 Inter, sans-serif; display: flex; gap: 6px; align-items: center">Show floorplan<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a><sc-if value="{{hasListing}}" hint-placeholder-val="{{ true }}"><a href="{{listing}}" target="_blank" rel="noopener" style="font: 600 13.5px/1 Inter, sans-serif; display: flex; gap: 6px; align-items: center">Our exhibitor listing<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a></sc-if></div></sc-if>
     </div>
@@ -895,7 +1020,7 @@ body{background:var(--bg);color:var(--fg)}
       <sc-if value="{{noRender}}" hint-placeholder-val="{{ false }}"><div style="height: 238px; border-radius: 12px; border: 1.5px dashed rgba(0,46,56,0.28); background: #F7F0E8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #5B6F74; text-align: center; padding: 20px">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path><path d="M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="m21 15-5-5L5 21"></path></svg>
         <span style="font: 600 14px/1.3 Inter, sans-serif; color: #002E38">Stand render or photo</span>
-        <span style="font: 400 12.5px/1.45 Inter, sans-serif; max-width: 300px">Add the approved visual once - it appears in the attendee briefing automatically.</span>
+        <span style="font: 400 12.5px/1.45 Inter, sans-serif; max-width: 300px">Add the approved visual or a photo of the set-up. It appears in the attendee briefing automatically.</span><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.stand.edit}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif">Upload an image</button></sc-if>
       </div></sc-if>
     </div>
     </sc-if>
@@ -968,6 +1093,7 @@ body{background:var(--bg);color:var(--fg)}
     </div>
   </div>
   </sc-for>
+  <sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><div style="display: flex; justify-content: flex-end"><button type="button" data-on-click="{{addAsset}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add asset</button></div></sc-if>
   <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
     <sc-for list="{{pipeline}}" as="p" hint-placeholder-count="5">
       <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
@@ -982,15 +1108,16 @@ body{background:var(--bg);color:var(--fg)}
     </div>
     <sc-for list="{{assets}}" as="a" hint-placeholder-count="8">
       <div style="display: grid; grid-template-columns: 2.3fr 0.5fr 1.6fr 1fr 1.3fr 1.5fr 0.9fr; gap: 12px; padding: 14px 20px; border-top: 1px solid rgba(0,46,56,0.08); align-items: center; font: 500 13.5px/1.35 Inter, sans-serif; background: {{a.rowBg}}">
-        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{a.n}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{a.type}} · <span style="text-decoration: underline; text-underline-offset: 2px">Artwork link</span></span></span>
+        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{a.n}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{a.typeL}}<sc-if value="{{a.hasLink}}" hint-placeholder-val="{{ false }}"> · <a href="{{a.link}}" target="_blank" rel="noopener" style="color: #002E38">Artwork</a></sc-if></span><span style="font: 400 12px/1.3 Inter, sans-serif; color: #5B6F74">{{a.noteL}}</span></span>
         <span>{{a.qty}}</span>
         <span style="display: flex; flex-direction: column; gap: 7px"><span class="pill" style="align-self: flex-start; background: {{a.stageP.bg}}; color: {{a.stageP.fg}}">{{a.stageP.label}}</span><span style="display: flex; gap: 4px"><sc-for list="{{a.dots}}" as="d" hint-placeholder-count="5"><span style="width: 18px; height: 4px; border-radius: 2px; background: {{d.bg}}"></span></sc-for></span></span>
         <span>{{a.ownerN}}</span>
         <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 400; color: #5B6F74">{{a.supplier}}</span><span style="font-weight: 700; color: {{a.dlColor}}">Due {{a.deadlineL}}</span></span>
         <span style="display: flex; flex-direction: column; gap: 5px"><span style="font-weight: 400; color: #5B6F74">{{a.dest}}</span><span class="pill" style="align-self: flex-start; background: {{a.deliveryP.bg}}; color: {{a.deliveryP.fg}}">{{a.deliveryP.label}}</span></span>
-        <span><sc-if value="{{a.canAdvance}}" hint-placeholder-val="{{ true }}"><button type="button" data-on-click="{{a.advance}}" style="border: 1px solid rgba(0,46,56,0.18); background: #FFFFFF; border-radius: 999px; padding: 8px 12px; font: 600 12px/1 Inter, sans-serif; color: #002E38; display: flex; gap: 5px; align-items: center">Next stage<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></button></sc-if></span>
+        <span style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start"><sc-if value="{{a.canAdvance}}" hint-placeholder-val="{{ true }}"><button type="button" data-on-click="{{a.advance}}" style="border: 1px solid rgba(0,46,56,0.18); background: #FFFFFF; border-radius: 999px; padding: 8px 12px; font: 600 12px/1 Inter, sans-serif; color: #002E38; display: flex; gap: 5px; align-items: center">Next stage<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></button></sc-if><span style="display: flex; gap: 4px"><sc-if value="{{a.canBack}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{a.back}}" style="border: 0; background: transparent; padding: 4px 6px; font: 600 11.5px/1 Inter, sans-serif; color: #5B6F74">Back</button></sc-if><sc-if value="{{a.canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{a.edit}}" style="border: 0; background: transparent; padding: 4px 6px; font: 600 11.5px/1 Inter, sans-serif; color: #002E38; display: inline-flex; gap: 4px; align-items: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span></span>
       </div>
     </sc-for>
+    <sc-if value="{{noAssets}}" hint-placeholder-val="{{ false }}"><div style="padding: 24px 20px; border-top: 1px solid rgba(0,46,56,0.08); color: #5B6F74; font: 400 14px/1.4 Inter, sans-serif">No assets yet. Add leaflets, banners, adverts or anything else being made or printed for this event.</div></sc-if>
   </div>
   <div style="display: flex; gap: 8px; align-items: center; font: 400 12.5px/1.4 Inter, sans-serif; color: #5B6F74"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>Anything approved or further along shows in the attendee briefing as available collateral. Rows turn pink when the print deadline has passed.</div>
   </sc-if>
@@ -998,7 +1125,7 @@ body{background:var(--bg);color:var(--fg)}
   <!-- ---------- MERCH ---------- -->
   <sc-if value="{{tab.merch}}" hint-placeholder-val="{{ false }}">
   <div class="card" style="overflow: hidden">
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 18px 20px"><span class="eyebrow">Merchandise allocated to this event</span><button type="button" data-on-click="{{goInv}}" style="border: 1px solid rgba(0,46,56,0.18); background: #FFFFFF; border-radius: 999px; padding: 8px 14px; font: 600 12.5px/1 Inter, sans-serif; color: #002E38; display: flex; gap: 6px; align-items: center">Stock across all events<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></button></div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 18px 20px"><span class="eyebrow">Merchandise allocated to this event</span><span style="display: flex; gap: 8px; align-items: center"><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.merch.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit allocation</button></sc-if><button type="button" data-on-click="{{goInv}}" style="border: 1px solid rgba(0,46,56,0.18); background: #FFFFFF; border-radius: 999px; padding: 8px 14px; font: 600 12.5px/1 Inter, sans-serif; color: #002E38; display: flex; gap: 6px; align-items: center">Stock across all events<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></button></span></div>
     <div style="display: grid; grid-template-columns: 1.6fr 0.9fr 1fr 1fr 1fr 1.4fr 1.8fr; gap: 12px; padding: 14px 20px; background: #F7F0E8">
       <span class="th">Item</span><span class="th">Total stock</span><span class="th">This event</span><span class="th">Other events</span><span class="th">Remaining</span><span class="th">Location</span><span class="th">Notes</span>
     </div>
@@ -1019,7 +1146,7 @@ body{background:var(--bg);color:var(--fg)}
   <sc-if value="{{hasLead}}" hint-placeholder-val="{{ true }}">
   <div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; align-items: start">
     <div class="card" style="padding: 8px 24px 12px">
-      <div class="eyebrow" style="padding: 16px 0 4px">Lead capture setup</div>
+      <div style="padding: 16px 0 4px"><div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap"><span class="eyebrow">Lead capture setup</span><span style="display: flex; gap: 8px; align-items: center"><sc-if value="{{secs.lead.hasMissing}}" hint-placeholder-val="{{ false }}"><span class="pill" title="{{secs.lead.list}}" style="background: #FBD9E6; color: #951F51">{{secs.lead.missingL}}</span></sc-if><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{secs.lead.edit}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit</button></sc-if></span></div></div>
       <sc-for list="{{leadKv}}" as="r" hint-placeholder-count="7"><div style="display: flex; flex-direction: column; gap: 5px; padding: 12px 0; border-top: 1px solid rgba(0,46,56,0.08)"><div style="display: flex; align-items: center; gap: 8px"><span class="th">{{r.k}}</span><sc-if value="{{r.brief}}" hint-placeholder-val="{{ false }}"><span class="btag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path></svg>Briefing</span></sc-if></div><sc-if value="{{r.ok}}" hint-placeholder-val="{{ true }}"><div style="font: 500 14.5px/1.45 Inter, sans-serif; color: #002E38">{{r.v}}</div></sc-if><sc-if value="{{r.missing}}" hint-placeholder-val="{{ false }}"><div style="font: 600 14px/1.45 Inter, sans-serif; color: #C21F62; display: flex; gap: 6px; align-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>{{r.v}}</div></sc-if><sc-if value="{{r.hasExtra}}" hint-placeholder-val="{{ false }}"><div style="font: 400 12px/1.3 Inter, sans-serif; color: #5B6F74">{{r.extra}}</div></sc-if></div></sc-for>
     </div>
     <div style="display: flex; flex-direction: column; gap: 18px">
@@ -1028,7 +1155,7 @@ body{background:var(--bg);color:var(--fg)}
         <div style="display: flex; flex-direction: column; gap: 12px">
           <sc-for list="{{leadAccess}}" as="p" hint-placeholder-count="3"><span style="display: flex; gap: 12px; align-items: center"><span style="width: 32px; height: 32px; border-radius: 999px; background: #66FF94; color: #002E38; display: flex; align-items: center; justify-content: center; font: 700 11px/1 Inter, sans-serif">{{p.init}}</span><span style="display: flex; flex-direction: column; gap: 2px"><span style="font: 600 13.5px/1.2 Inter, sans-serif">{{p.name}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{p.role}}</span></span></span></sc-for>
         </div>
-        <div style="font: 400 12px/1.4 Inter, sans-serif; color: #5B6F74; margin-top: 14px">Set per attendee on the Attendees tab.</div>
+        <div style="font: 400 12px/1.4 Inter, sans-serif; color: #5B6F74; margin-top: 14px">Set in Edit on the lead capture setup.</div>
       </div>
       <sc-if value="{{hasHubLinks}}" hint-placeholder-val="{{ false }}"><div class="card" style="padding: 22px">
         <div class="eyebrow" style="margin-bottom: 4px">Exhibitor hub · Marketing only</div>
@@ -1102,7 +1229,7 @@ body{background:var(--bg);color:var(--fg)}
     </sc-for>
   </div>
   <div class="card" style="padding: 22px 24px; display: flex; flex-direction: column; gap: 14px">
-    <span style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><span class="eyebrow">Spend against budget</span><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{addBudget}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add cost line</button></sc-if></span>
+    <span style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><span class="eyebrow">Spend against budget</span><span style="display: flex; gap: 8px"><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{editEvent}}" style="border: 1px solid rgba(0,46,56,0.16); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 6px 11px; font: 600 12px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Set total budget</button></sc-if><sc-if value="{{canEdit}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{addBudget}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add cost line</button></sc-if></span></span>
     <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr) 60px; gap: 12px; align-items: center; font: 500 13px/1 Inter, sans-serif">
       <span>Committed</span><span style="height: 10px; border-radius: 6px; background: #F3E9DC; overflow: hidden; display: block"><span style="display: block; height: 100%; width: {{committedPct}}%; background: #002E38"></span></span><span style="font-weight: 700; text-align: right">{{committedPct}}%</span>
       <span>Actual</span><span style="height: 10px; border-radius: 6px; background: #F3E9DC; overflow: hidden; display: block"><span style="display: block; height: 100%; width: {{actualPct}}%; background: #1F9D57"></span></span><span style="font-weight: 700; text-align: right">{{actualPct}}%</span>
@@ -1133,6 +1260,14 @@ body{background:var(--bg);color:var(--fg)}
       <span style="font: 400 12.5px/1.4 Inter, sans-serif; color: #5B6F74">{{bsDone}} areas complete or not applicable. Anything already in the event record is pulled through automatically. Edits here update the event record and the attendee briefing straight away.</span>
     </div>
     <button type="button" data-on-click="{{goBrief}}" style="flex-shrink: 0; border: 0; border-radius: 999px; padding: 11px 16px; background: #66FF94; color: #002E38; font: 600 13px/1 Inter, sans-serif; display: flex; gap: 6px; align-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path></svg>Preview attendee briefing</button>
+  </div>
+  <div class="card" style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-color: {{bsShareBorder}}">
+    <div style="display: flex; flex-direction: column; gap: 5px; min-width: 0">
+      <sc-if value="{{bsShared}}" hint-placeholder-val="{{ false }}"><span style="font: 600 15px/1.3 Inter, sans-serif; display: flex; gap: 10px; align-items: center"><span class="pill" style="background: #D6F7E1; color: #0B6433">Shared</span>The BD team can open this briefing.</span></sc-if>
+      <sc-if value="{{bsNotShared}}" hint-placeholder-val="{{ true }}"><span style="font: 600 15px/1.3 Inter, sans-serif; display: flex; gap: 10px; align-items: center"><span class="pill" style="background: #F3E9DC; color: #4D6166">Not shared yet</span>The BD team sees this event as “Briefing coming soon”.</span></sc-if>
+      <span style="font: 400 12.5px/1.4 Inter, sans-serif; color: #5B6F74">Share it once the briefing is ready. You can hide it again at any time.</span>
+    </div>
+    <sc-if value="{{canEdit}}" hint-placeholder-val="{{ true }}"><button type="button" data-on-click="{{toggleShare}}" style="flex-shrink: 0; border: 1px solid rgba(0,46,56,0.18); border-radius: 999px; padding: 11px 16px; background: #002E38; color: #FFFFFF; font: 600 13px/1 Inter, sans-serif">{{bsShareL}}</button></sc-if>
   </div>
   <sc-if value="{{bsReadOnly}}" hint-placeholder-val="{{ false }}"><div style="padding: 10px 14px; border-radius: 12px; background: #F3E9DC; font: 500 13px/1.4 Inter, sans-serif">You have view access, so these fields are read-only. Ask Jasmine or Kirstey to make changes.</div></sc-if>
   <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start">
@@ -1169,9 +1304,23 @@ body{background:var(--bg);color:var(--fg)}
   <!-- ---------- RESULTS ---------- -->
   <sc-if value="{{tab.results}}" hint-placeholder-val="{{ false }}">
   <div style="display: flex; gap: 10px; align-items: center; padding: 14px 18px; border-radius: 14px; background: #F3E9DC; font: 500 13.5px/1.4 Inter, sans-serif"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 6v6l4 2"></path></svg>{{resultsNote}}</div>
+  <div class="card" style="padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap"><span style="display: flex; flex-direction: column; gap: 4px"><span class="eyebrow">Feedback from the BD team</span><span style="font: 400 12.5px/1.4 Inter, sans-serif; color: #5B6F74">Attendees fill this in under Event feedback on their page, from the first day of the event.</span></span><sc-if value="{{fbCanUse}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{useFb}}" style="border: 0; background: #66FF94; color: #002E38; border-radius: 999px; padding: 9px 14px; font: 600 12.5px/1 Inter, sans-serif; white-space: nowrap">Fill results from feedback</button></sc-if></div>
+    <sc-if value="{{noFb}}" hint-placeholder-val="{{ false }}"><div style="font: 400 13.5px/1.45 Inter, sans-serif; color: #5B6F74">No feedback yet.</div></sc-if>
+    <sc-if value="{{hasFb}}" hint-placeholder-val="{{ true }}">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px"><sc-for list="{{fbSum}}" as="k" hint-placeholder-count="5"><div style="padding: 12px 14px; border-radius: 12px; background: #F7F0E8; display: flex; flex-direction: column; gap: 6px"><span class="th">{{k.k}}</span><span style="font: 700 17px/1.2 Inter, sans-serif">{{k.v}}</span></div></sc-for></div>
+    <sc-for list="{{fbRows}}" as="f" hint-placeholder-count="2">
+      <div style="border-top: 1px solid rgba(0,46,56,0.08); padding-top: 14px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap"><span style="display: flex; gap: 10px; align-items: center"><span style="width: 32px; height: 32px; border-radius: 999px; background: #002E38; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font: 700 11px/1 Inter, sans-serif">{{f.init}}</span><span style="display: flex; flex-direction: column; gap: 2px"><span style="font: 600 14px/1.2 Inter, sans-serif">{{f.name}}</span><span style="font: 400 12px/1.2 Inter, sans-serif; color: #5B6F74">{{f.when}}</span></span></span><span style="display: flex; gap: 8px; align-items: center"><span class="pill" style="background: #002E38; color: #66FF94">Rated {{f.rating}}</span><span class="pill" style="background: {{f.rebook.bg}}; color: {{f.rebook.fg}}">Go again: {{f.rebookL}}</span></span></div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{f.nums}}" as="x" hint-placeholder-count="3"><span class="pill" style="background: #F3E9DC; color: #002E38">{{x.k}}: {{x.v}}</span></sc-for><sc-for list="{{f.tags}}" as="x" hint-placeholder-count="2"><span class="pill" style="background: #DCEFF1; color: #0B5560">{{x.t}}</span></sc-for></div>
+        <sc-for list="{{f.notes}}" as="x" hint-placeholder-count="2"><div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; font: 400 13.5px/1.45 Inter, sans-serif"><span style="font-weight: 600; color: #2D4A51">{{x.k}}</span><span style="white-space: pre-line">{{x.v}}</span></div></sc-for>
+      </div>
+    </sc-for>
+    </sc-if>
+  </div>
   <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
-    <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">Leads captured</span><input inputmode="numeric" value="{{R.leads}}" data-on-change="{{setLeads}}" placeholder="0"></label>
-    <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">MQLs</span><input inputmode="numeric" value="{{R.mqls}}" data-on-change="{{setMqls}}" placeholder="0"></label>
+    <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">All leads collected</span><span style="font: 400 11.5px/1.3 Inter, sans-serif; color: #5B6F74">Everyone we captured, qualified or not</span><input inputmode="numeric" value="{{R.leads}}" data-on-change="{{setLeads}}" placeholder="0"></label>
+    <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">Qualified leads (MQLs)</span><span style="font: 400 11.5px/1.3 Inter, sans-serif; color: #5B6F74">Right role, real need, happy to be followed up</span><input inputmode="numeric" value="{{R.mqls}}" data-on-change="{{setMqls}}" placeholder="0"></label>
     <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">Meetings booked</span><input inputmode="numeric" value="{{R.meetings}}" data-on-change="{{setMeetings}}" placeholder="0"></label>
     <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">Opportunities created</span><input inputmode="numeric" value="{{R.opps}}" data-on-change="{{setOpps}}" placeholder="0"></label>
     <label class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px"><span class="th">Estimated pipeline (£)</span><input inputmode="numeric" value="{{R.pipeline}}" data-on-change="{{setPipeline}}" placeholder="0"></label>
@@ -1339,7 +1488,7 @@ body{background:var(--bg);color:var(--fg)}
             <div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start">
               <div style="display: flex; flex-direction: column; gap: 10px">
                 <sc-if value="{{hasRender}}" hint-placeholder-val="{{ true }}"><img src="{{render}}" alt="Render of the Tute stand" style="width: 100%; height: auto; border-radius: 14px; border: 1px solid rgba(0,46,56,0.1); display: block"></sc-if>
-                <div style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{bv.standFacts}}" as="r" hint-placeholder-count="3"><span class="pill" style="background: #F3E9DC; color: #002E38">{{r.k}}: {{r.v}}</span></sc-for></div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{bv.standFacts}}" as="r" hint-placeholder-count="3"><span class="pill" style="background: #F3E9DC; color: #002E38; white-space: normal; height: auto; min-height: 22px; padding: 4px 9px; line-height: 1.35; max-width: 100%">{{r.k}}: {{r.v}}</span></sc-for></div>
               </div>
               <div>
                 <div class="tk" style="margin-bottom: 4px">Where things go</div>
@@ -1358,6 +1507,7 @@ body{background:var(--bg);color:var(--fg)}
             <sc-if value="{{bv.hasBring}}" hint-placeholder-val="{{ true }}"><section class="card" style="padding: 22px">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px"><span style="width: 36px; height: 36px; border-radius: 9px; background: #66FF94; color: #002E38; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1Z"></path><path d="M10 12h4"></path></svg></span><h2 class="gruffy" style="font-weight: 600; font-size: 22px; line-height: 1.15; margin: 0">Bring with you</h2></div>
               <sc-for list="{{bv.bring}}" as="x" hint-placeholder-count="3"><div class="bli"><span aria-hidden="true" style="width: 16px; height: 16px; flex-shrink: 0; border-radius: 5px; border: 1.5px solid rgba(0,46,56,0.3); margin-top: 2px"></span>{{x.s}}</div></sc-for>
+              <sc-if value="{{bv.hasResources}}" hint-placeholder-val="{{ true }}"><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px"><sc-for list="{{bv.resources}}" as="l" hint-placeholder-count="1"><a href="{{l.url}}" target="_blank" rel="noopener" style="text-decoration: none; border: 1px solid rgba(0,46,56,0.18); background: #66FF94; border-radius: 999px; padding: 9px 13px; font: 600 12.5px/1 Inter, sans-serif; color: #002E38; display: flex; gap: 6px; align-items: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>{{l.label}}</a></sc-for></div></sc-if>
             </section></sc-if>
           </div>
           <section class="card" style="padding: 22px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
@@ -1454,15 +1604,15 @@ body{background:var(--bg);color:var(--fg)}
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><h2 style="font: 600 20px/1.2 Inter, sans-serif; margin: 0">{{ed.title}}</h2><button type="button" data-on-click="{{ed.cancel}}" aria-label="Close" style="border: 0; background: #F7F0E8; color: #002E38; width: 34px; height: 34px; border-radius: 999px; font: 600 18px/1 Inter, sans-serif">×</button></div>
     <sc-for list="{{ed.fields}}" as="f" hint-placeholder-count="5">
       <div style="display: flex; flex-direction: column; gap: 7px">
-        <label for="{{f.id}}" style="font: 600 12.5px/1.2 Inter, sans-serif; color: #2D4A51">{{f.label}}</label>
+        <label for="{{f.id}}" style="font: 600 12.5px/1.2 Inter, sans-serif; color: #2D4A51">{{f.label}}</label><sc-if value="{{f.hasHint}}" hint-placeholder-val="{{ false }}"><span style="font: 400 12px/1.4 Inter, sans-serif; color: #5B6F74; margin-top: -3px">{{f.hint}}</span></sc-if>
         <sc-if value="{{f.isText}}" hint-placeholder-val="{{ true }}"><input id="{{f.id}}" type="text" value="{{f.value}}" data-on-change="{{f.change}}"></sc-if>
         <sc-if value="{{f.isNum}}" hint-placeholder-val="{{ false }}"><input id="{{f.id}}" type="text" inputmode="decimal" value="{{f.value}}" data-on-change="{{f.change}}" style="max-width: 200px"></sc-if>
         <sc-if value="{{f.isDate}}" hint-placeholder-val="{{ false }}"><input id="{{f.id}}" type="date" value="{{f.value}}" data-on-change="{{f.change}}" style="max-width: 220px"></sc-if>
-        <sc-if value="{{f.isArea}}" hint-placeholder-val="{{ false }}"><textarea id="{{f.id}}" rows="4" value="{{f.value}}" data-on-change="{{f.change}}"></textarea></sc-if>
-        <sc-if value="{{f.isChips}}" hint-placeholder-val="{{ false }}"><div role="group" aria-label="{{f.label}}" style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{f.options}}" as="o" hint-placeholder-count="3"><button type="button" data-on-click="{{o.pick}}" style="border: 1px solid rgba(0,46,56,0.18); border-radius: 999px; padding: 8px 12px; font: 600 12.5px/1 Inter, sans-serif; background: {{o.bg}}; color: {{o.fg}}">{{o.label}}</button></sc-for></div></sc-if>
+        <sc-if value="{{f.isArea}}" hint-placeholder-val="{{ false }}"><textarea id="{{f.id}}" rows="{{f.rows}}" value="{{f.value}}" data-on-change="{{f.change}}"></textarea></sc-if>
+        <sc-if value="{{f.isChips}}" hint-placeholder-val="{{ false }}"><div role="group" aria-label="{{f.label}}" style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{f.options}}" as="o" hint-placeholder-count="3"><button type="button" data-on-click="{{o.pick}}" style="border: 1px solid rgba(0,46,56,0.18); border-radius: 999px; padding: 8px 12px; font: 600 12.5px/1 Inter, sans-serif; background: {{o.bg}}; color: {{o.fg}}">{{o.label}}</button></sc-for></div></sc-if><sc-if value="{{f.isUpload}}" hint-placeholder-val="{{ false }}"><div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1.5px dashed rgba(0,46,56,0.25); border-radius: 12px; background: #FBF8F4"><sc-if value="{{f.isImg}}" hint-placeholder-val="{{ false }}"><img src="{{f.fileUrl}}" alt="" style="max-width: 100%; max-height: 180px; object-fit: contain; align-self: flex-start; border-radius: 8px; border: 1px solid rgba(0,46,56,0.1)"></sc-if><sc-if value="{{f.hasFile}}" hint-placeholder-val="{{ false }}"><span style="display: flex; gap: 12px; align-items: center; font: 600 12.5px/1.2 Inter, sans-serif"><a href="{{f.fileUrl}}" target="_blank" rel="noopener" style="color: #002E38">Open current file</a><button type="button" data-on-click="{{f.clear}}" style="border: 0; background: transparent; color: #951F51; font: 600 12.5px/1 Inter, sans-serif; padding: 0">Remove</button></span></sc-if><input id="{{f.id}}" type="file" accept="{{f.accept}}" data-on-change="{{f.upload}}" style="font: 500 13px/1.3 Inter, sans-serif; background: transparent; border: 0; padding: 0"><sc-if value="{{f.hasUpMsg}}" hint-placeholder-val="{{ false }}"><span style="font: 600 12.5px/1.3 Inter, sans-serif; color: #0B5560">{{f.upMsg}}</span></sc-if></div></sc-if>
       </div>
     </sc-for>
-    <sc-if value="{{ed.hasErr}}" hint-placeholder-val="{{ false }}"><div role="alert" style="font: 600 13px/1.3 Inter, sans-serif; color: #951F51">{{ed.err}}</div></sc-if>
+    <span style="font: 400 12px/1.3 Inter, sans-serif; color: #5B6F74">* needed for every event of this type</span><sc-if value="{{ed.hasErr}}" hint-placeholder-val="{{ false }}"><div role="alert" style="font: 600 13px/1.3 Inter, sans-serif; color: #951F51">{{ed.err}}</div></sc-if>
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 6px; border-top: 1px solid rgba(0,46,56,0.1)">
       <span><sc-if value="{{ed.canDel}}" hint-placeholder-val="{{ false }}"><button type="button" data-on-click="{{ed.del}}" style="border: 1px solid rgba(149,31,81,0.35); background: #FFFFFF; color: #951F51; border-radius: 999px; padding: 10px 14px; font: 600 13px/1 Inter, sans-serif">{{ed.delL}}</button></sc-if></span>
       <span style="display: flex; gap: 8px"><button type="button" data-on-click="{{ed.cancel}}" style="border: 1px solid rgba(0,46,56,0.18); background: #FFFFFF; color: #002E38; border-radius: 999px; padding: 10px 16px; font: 600 13px/1 Inter, sans-serif">Cancel</button><button type="button" data-on-click="{{ed.save}}" style="border: 0; background: #002E38; color: #FFFFFF; border-radius: 999px; padding: 10px 18px; font: 600 13px/1 Inter, sans-serif">Save</button></span>
@@ -1489,10 +1639,10 @@ body{background:var(--bg);color:var(--fg)}
 
   renderVals() {
     const S = this.state;
-    const { PEOPLE, INITIALS, SETTINGS, ASSOCIATE_BY_CAT, SIMPLE, MERCH, EVENTS, TEMPLATES, PHASES, PIPELINE, REQUESTS, HISTORY } = this.data();
+    const { PEOPLE, INITIALS, SETTINGS, ASSOCIATE_BY_CAT, SIMPLE, MERCH, EVENTS, TEMPLATES, PHASES, PIPELINE, REQUESTS, HISTORY } = this.data(); const STOCK = this.data().STOCK || null;
     const tplOf = (ev) => (TEMPLATES || {})[ev.template || 'exhibition'] || { label: 'Event', standLabel: 'Stand', standFields: ['number', 'size', 'build', 'supplier', 'signoff'], checklist: true, render: true, tasks: [] };
     const set = (o) => this.setState(o);
-    const TODAY = new Date(); TODAY.setHours(0, 0, 0, 0);
+    const TODAY = new Date(); const TODAY_ISO = new Date(TODAY.getTime() - TODAY.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); TODAY.setHours(0, 0, 0, 0);
     const D = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
     const days = (a, b) => Math.round((b - a) / 864e5);
     const wd = (s) => D(s).toLocaleDateString('en-GB', { weekday: 'short' });
@@ -1562,7 +1712,7 @@ body{background:var(--bg);color:var(--fg)}
       if (isMissing(ev.venue)) confirm.push({ label: 'Venue', tab: 'overview' });
       if (ev.logistics && isMissing(ev.logistics.buildTime)) confirm.push({ label: 'Build time', tab: 'logistics' });
       if (ev.lead && isMissing(ev.lead.method)) confirm.push({ label: 'Lead capture method', tab: 'leads' });
-      if (ev.lead && isMissing(ev.lead.code)) confirm.push({ label: 'SmartScan activation', tab: 'leads' });
+      if (ev.lead && /scan|app/i.test(ev.lead.method || '') && isMissing(ev.lead.code)) confirm.push({ label: 'Badge scanner activation', tab: 'leads' });
       const preTasks = tasks.filter((t) => t.cat !== 'Post-event');
       const preDone = preTasks.length && preTasks.every((t) => t.done);
       let status;
@@ -1595,18 +1745,32 @@ body{background:var(--bg);color:var(--fg)}
     const curTerm = (TERMS.find((t) => TODAY >= D(t.from) && TODAY <= D(t.to)) || TERMS[0]).n;
 
     /* ---- merch: stock is master, allocations roll up across events ---- */
-    const merchRows = MERCH.map((m) => {
-      const allocated = EVENTS.reduce((s, e) => s + ((e.merch || {})[m.id] || 0), 0);
+    const heldOf = (m) => STOCK && STOCK.held ? Object.keys(STOCK.held).reduce((t, h) => t + (Number((STOCK.held[h] || {})[m.id]) || 0), 0) : null;
+    const UPC = EVENTS.filter((e) => String(e.end || e.start) >= TODAY_ISO && e.booking !== 'Cancelled');
+    const MTERMS = TERMS.filter((t) => UPC.some((e) => String(e.start) >= t.from && String(e.start) <= t.to));
+    const mTerm = MTERMS.find((t) => t.n === S.merchTerm) || MTERMS[0] || TERMS[0];
+    const MEV = UPC.filter((e) => String(e.start) >= mTerm.from && String(e.start) <= mTerm.to);
+    const merchTabs = MTERMS.map((t) => { const on = t.n === mTerm.n; return { label: t.label + ' · ' + t.sub, n: String(UPC.filter((e) => String(e.start) >= t.from && String(e.start) <= t.to).length), bg: on ? '#002E38' : '#FFFFFF', fg: on ? '#FFFFFF' : '#002E38', pick: () => set({ merchTerm: t.n }) }; });
+    const merchCols = '1.5fr 0.7fr repeat(' + Math.max(1, MEV.length) + ', minmax(0, 0.8fr)) 0.8fr 0.8fr 0.9fr';
+    const merchRows = MERCH.map((m0) => {
+      const h0 = heldOf(m0); const m = h0 === null ? m0 : Object.assign({}, m0, { total: h0, location: 'Across ' + STOCK.holders.length + ' places, see below' });
+      const allocated = (STOCK ? UPC : EVENTS).reduce((s, e) => s + ((e.merch || {})[m.id] || 0), 0);
       const remaining = m.total - allocated;
-      const low = remaining / m.total < 0.15;
-      return { ...m, allocated, remaining, low, pct: Math.round(allocated / m.total * 100), stockPill: low ? pill('Not ordered') : pill('Done'), stockLabel: low ? 'Low stock' : 'OK',
-        perEvent: EVENTS.map((e) => ({ v: (e.merch || {})[m.id] || '-' })) };
+      const low = m.total ? remaining / m.total < 0.15 : true;
+      return { ...m, allocated, remaining, low, pct: m.total ? Math.round(allocated / m.total * 100) : 0, stockPill: low ? pill('Not ordered') : pill('Done'), stockLabel: low ? 'Low stock' : 'OK',
+        perEvent: MEV.map((e) => ({ v: (e.merch || {})[m.id] || '-' })) };
     });
 
+    const CT_ROLES = ['Organiser', 'Account manager (sales)', 'Operations', 'Finance and invoices', 'Health and safety', 'Marketing and content', 'Stand contractor', 'Venue', 'Logistics and couriers', 'Supplier', 'Other'];
+    const AUD_SET = ['Local authorities', 'Mainstream schools', 'Non-mainstream (AP, PRU, special)', 'Trusts and MATs', 'Independent schools', 'Parents and carers'];
+    const AUD_PHASE = ['Early years', 'Primary', 'Secondary', 'Post-16', 'All phases'];
+    const AUD_ROLE = ['Heads and senior leaders', 'SENCOs and inclusion leads', 'LA SEND and inclusion teams', 'AP and virtual school leads', 'Business and finance leads', 'Governors and trustees', 'Teachers'];
+    const arr0 = (v) => Array.isArray(v) ? v.filter(Boolean) : [];
+    const audLine = (ev) => [arr0(ev.settings).join(', '), arr0(ev.phases).join(', ')].filter(Boolean).join(' · ');
     /* ---- event cards (hub) ---- */
     const card = (x) => {
       const { ev, c } = x; const o = person(ev.owner); const bdp = ev.bd ? person(ev.bd) : null;
-      return { id: ev.id, name: ev.name, short: ev.short, type: ev.type + (ev.standType ? ' · ' + ev.standType : ''), booking: pill(ev.booking || 'Pipeline'), bdInit: bdp ? bdp.init : '-', bdName: bdp ? bdp.name : 'BD owner to assign', hasBd: !!bdp, standLine: (ev.booking || 'Pipeline') + ' · ' + (ev.stand && ev.stand.number === 'n/a' ? 'No stand' : (ev.stand && !isMissing(ev.stand.number) ? 'Stand ' + ev.stand.number : 'Stand TBC')), audience: ev.audience, where: (ev.venue || 'Venue TBC') + ', ' + ev.city, date: c.dateLabel, owner: o.name, ownerInit: o.init,
+      return { id: ev.id, name: ev.name, short: ev.short, type: ev.type + (ev.standType ? ' · ' + ev.standType : ''), booking: pill(ev.booking || 'Pipeline'), bdInit: bdp ? bdp.init : '-', bdName: bdp ? bdp.name : 'BD owner to assign', hasBd: !!bdp, standLine: (ev.booking || 'Pipeline') + ' · ' + (ev.stand && ev.stand.number === 'n/a' ? 'No stand' : (ev.stand && !isMissing(ev.stand.number) ? 'Stand ' + ev.stand.number : 'Stand TBC')), audience: audLine(ev) || ev.audience, where: (ev.venue || 'Venue TBC') + ', ' + ev.city, date: c.dateLabel, owner: o.name, ownerInit: o.init,
         status: pill(c.status), progress: c.progress, doneOf: c.done + '/' + c.total, daysNum: c.past || c.live ? '' : String(c.du), daysWord: c.live ? 'Live now' : c.past ? 'Finished' : c.du === 1 ? 'day to go' : 'days to go',
         hasAlert: c.alerts.length > 0, noAlert: c.alerts.length === 0, alert: c.alerts.length ? c.alerts[0].label + (c.alerts.length > 1 ? ' · +' + (c.alerts.length - 1) + ' more' : '') : 'On track',
         barColor: c.overdue ? '#E0367C' : '#1F9D57', open: () => set({ screen: 'event', eventId: ev.id, tab: 'overview', taskFilter: 'all', taskCat: 'All' }),
@@ -1636,7 +1800,9 @@ body{background:var(--bg);color:var(--fg)}
 
     /* ---- selected event workspace ---- */
     const X = byId[S.eventId] || all[0];
-    const ev = X.ev, c = X.c;
+    /* Template defaults: a small conference's briefing falls back on the template's standard wording wherever the event's own field is empty */
+    const fillDefaults = (o, d) => { if (!d || typeof d !== 'object') return o; const r = Object.assign({}, o); Object.keys(d).forEach((k) => { const v = r[k], dv = d[k]; const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length); if (empty) r[k] = dv; else if (dv && typeof dv === 'object' && !Array.isArray(dv) && v && typeof v === 'object' && !Array.isArray(v)) r[k] = fillDefaults(v, dv); }); return r; };
+    const ev = fillDefaults(X.ev, tplOf(X.ev).defaults), c = X.c;
     const lg = ev.logistics || {}, st = ev.stand || {}, ld = ev.lead || { steps: [], questions: [], access: [] };
     const owner = person(ev.owner);
     const kv = (k, v, brief, extra) => ({ k, v: isMissing(v) ? (v && String(v).startsWith('[') ? v : 'To confirm') : v, missing: isMissing(v), ok: !isMissing(v), brief: !!brief, extra: extra || '', hasExtra: !!extra });
@@ -1646,7 +1812,7 @@ body{background:var(--bg);color:var(--fg)}
     const TPL = tplOf(ev);
     const TABS = [['overview', 'Overview'], ['attendees', 'Attendees'], ['logistics', 'Logistics'], ['stand', TPL.standLabel || 'Stand'], ['assets', 'Assets'], ['merch', 'Merchandise'], ['leads', 'Lead capture'], ['tasks', 'Tasks'], ['budget', 'Budget'], ['setup', 'Briefing setup'], ['results', 'Results']];
     const catTasks = (cat) => c.tasks.filter((t) => t.cat === cat);
-    const tabBadge = { tasks: c.overdue ? String(c.overdue) : '', attendees: String((ev.attendees || []).length || ''), assets: String((ev.assets || []).length || '') };
+    const tabBadge = { results: (ev.feedback || []).length ? String((ev.feedback || []).length) : '', tasks: c.overdue ? String(c.overdue) : '', attendees: String((ev.attendees || []).length || ''), assets: String((ev.assets || []).length || '') };
     const tabs = TABS.map(([id, label]) => {
       const active = S.tab === id;
       return { id, label, badge: tabBadge[id] || '', hasBadge: !!tabBadge[id], badgeBg: id === 'tasks' && c.overdue ? '#E0367C' : 'rgba(0,46,56,.1)', badgeFg: id === 'tasks' && c.overdue ? '#FFFFFF' : '#002E38',
@@ -1657,7 +1823,7 @@ body{background:var(--bg);color:var(--fg)}
     // Overview
     const details = [
       kv('Event date', c.dateLabel, true), kv('Opening hours', ev.hours, true), kv('Venue', ev.venue, true), kv('Address', ev.address, true),
-      kv('Stand number', st.number, true), kv('Stand size', st.size), kv('Event type', ev.type), kv('Stand type', ev.standType, true), kv('Booking status', ev.booking), kv('BD owner', ev.bd ? person(ev.bd).name : ''), kv('Target audience', ev.audience, true),
+      kv('Stand number', st.number, true), kv('Stand size', st.size), kv('Event type', ev.type), kv('Stand type', ev.standType, true), kv('Booking status', ev.booking), kv('BD owner', ev.bd ? person(ev.bd).name : ''), kv('Settings', arr0(ev.settings).join(', '), true), kv('Phase', arr0(ev.phases).join(', '), true), kv('Roles', arr0(ev.roles).join(', '), true), kv('Audience notes', ev.audience, true),
       kv('Marketing owner', owner.name, true), kv('Days until event', c.daysLabel, true)
     ];
     const CATS = PHASES || ['Book & approve', 'Plan', 'Prepare kit & assets', 'Brief the team', 'On the day', 'Follow up'];
@@ -1670,7 +1836,7 @@ body{background:var(--bg);color:var(--fg)}
     const nextUp = c.tasks.filter((t) => !t.done).slice(0, 5).map((t) => ({ ...t, dueColor: t.late ? '#C21F62' : '#5B6F74', when: t.late ? (t.lateBy === 1 ? '1 day late' : t.lateBy + ' days late') : dm(t.due) }));
 
     // Attendees
-    const attendees = (ev.attendees || []).map((a) => { const p = person(a.p); return { ...a, name: p.name, role: p.role, init: p.init, mobile: p.mobile, badgeP: pill(a.badge), travelP: pill(a.travel), accomP: pill(a.accom), scannerL: a.scanner ? 'SmartScan access' : '' }; });
+    const attendees = (ev.attendees || []).map((a) => { const p = person(a.p); return { ...a, name: p.name, role: p.role, init: p.init, mobile: p.mobile, badgeP: pill(a.badge), travelP: pill(a.travel), accomP: pill(a.accom), scannerL: a.scanner ? 'Badge scanner access' : '' }; });
     const attSummary = [
       { k: 'Attending', v: String(attendees.length) },
       { k: 'Badges registered', v: attendees.filter((a) => a.badge === 'Registered' || a.badge === 'Issued').length + '/' + attendees.length },
@@ -1728,7 +1894,7 @@ body{background:var(--bg);color:var(--fg)}
       if (shipIdx !== undefined) a = { ...a, delivery: shipIdx >= 3 ? 'Received' : shipIdx === 2 ? 'Delivered' : shipIdx === 1 ? 'In transit' : 'Not dispatched' };
       const late = stage < 3 && a.deadline && D(a.deadline) < TODAY && a.supplier !== 'Digital';
       return { ...a, id, stageN: stage, stageP: pill(STAGES[stage]), ownerN: person(a.owner).name, deadlineL: a.deadline ? dm(a.deadline) : '-', deliveryP: pill(a.delivery), late, rowBg: late ? '#FFF5F8' : '#FFFFFF', dlColor: late ? '#C21F62' : '#002E38',
-        dots: STAGES.map((s, k) => ({ bg: k <= stage ? (stage === 4 ? '#1F9D57' : '#002E38') : 'rgba(0,46,56,.14)' })), canAdvance: stage < 4, advance: () => set({ assetStage: { ...S.assetStage, [id]: Math.min(4, stage + 1) } }) };
+        dots: STAGES.map((s, k) => ({ bg: k <= stage ? (stage === 4 ? '#1F9D57' : '#002E38') : 'rgba(0,46,56,.14)' })), canAdvance: stage < 4, advance: () => set({ assetStage: { ...S.assetStage, [id]: Math.min(4, stage + 1) } }), canBack: stage > 0 && !!this.canEdit, back: () => set({ assetStage: { ...S.assetStage, [id]: Math.max(0, stage - 1) } }), hasLink: !!(a.file || a.link), link: a.file || a.link || '', canEdit: !!this.canEdit, edit: () => {}, typeL: a.type || 'Asset', noteL: a.note || '' };
     });
     const pipeline = STAGES.map((s, k) => ({ label: s, n: String(assets.filter((a) => a.stageN === k).length), bg: pill(s).bg, fg: pill(s).fg }));
 
@@ -1772,11 +1938,24 @@ body{background:var(--bg);color:var(--fg)}
     const setR = (k) => (e) => set({ results: { ...S.results, [ev.id]: { ...R, [k]: e.target.value } } });
     const leadsN = parseFloat(R.leads) || 0;
     const cpl = leadsN ? gbp(c.actual / leadsN) : '-';
+    const FB = (ev.feedback || []).filter((f) => f && f.by);
+    const fbN = (k) => FB.reduce((t, f) => t + (parseFloat(f[k]) || 0), 0);
+    const fbTally = (k) => { const o = {}; FB.forEach((f) => { if (f[k]) o[f[k]] = (o[f[k]] || 0) + 1; }); return Object.keys(o).map((x) => x + ' ' + o[x]).join(' · '); };
+    const fbRated = FB.filter((f) => f.rating);
+    const fbAvg = fbRated.length ? (fbRated.reduce((t, f) => t + Number(f.rating), 0) / fbRated.length).toFixed(1) : '-';
+    const fbRows = FB.map((f) => { const p = person(f.by); return { name: p.name, init: p.init, when: f.at ? full(String(f.at).slice(0, 10)) : '', rating: f.rating ? f.rating + '/5' : '-', rebook: pill(f.rebook === 'Yes' ? 'Yes' : f.rebook === 'No' ? 'No' : f.rebook || 'Not said'), rebookL: f.rebook || 'Not said',
+      nums: [['All leads', f.leads], ['Qualified (MQLs)', f.hot], ['Conversations', f.conversations], ['Meetings', f.meetings], ['Opportunities', f.opps]].filter((x) => x[1] !== '' && x[1] !== undefined).map((x) => ({ k: x[0], v: String(x[1]) })),
+      tags: [f.audience, f.footfall && f.footfall + ' footfall', f.d365 && 'D365: ' + f.d365.toLowerCase()].filter(Boolean).map((t) => ({ t })),
+      notes: [['Best leads', f.leadNames], ['What worked', f.worked], ['Do differently', f.improve], ['Competitors', f.competitors], ['Stand, kit and merch', f.kit]].filter((x) => x[1]).map((x) => ({ k: x[0], v: x[1] })) }; });
+    const fbSum = [{ k: 'Responses', v: String(FB.length) }, { k: 'Average rating', v: fbAvg === '-' ? '-' : fbAvg + '/5' }, { k: 'All leads', v: String(fbN('leads')) }, { k: 'Qualified (MQLs)', v: String(fbN('hot')) }, { k: 'Go again?', v: fbTally('rebook') || '-' }];
+    const useFb = () => { const names = FB.filter((f) => f.leadNames).map((f) => person(f.by).name.split(' ')[0] + ': ' + f.leadNames).join('\n');
+      const d = FB.filter((f) => f.d365).map((f) => person(f.by).name.split(' ')[0] + ': ' + f.d365.toLowerCase()).join(' · ');
+      set({ results: { ...S.results, [ev.id]: { ...R, leads: String(fbN('leads')), mqls: String(fbN('hot')), meetings: String(fbN('meetings')), opps: String(fbN('opps')), leadList: [R.leadList, names].filter(Boolean).join('\n'), d365: d || R.d365 || '' } } }); };
     const RET = (S.returned[ev.id]) || {};
     const resMerch = MERCH.filter((m) => (ev.merch || {})[m.id]).map((m) => { const al = ev.merch[m.id]; const ret = RET[m.id] ?? ''; const used = ret === '' ? '-' : String(Math.max(0, al - (parseFloat(ret) || 0))); return { id: m.id, name: m.name, allocated: String(al), returned: ret, used, set: (e) => set({ returned: { ...S.returned, [ev.id]: { ...RET, [m.id]: e.target.value } } }) }; });
 
     /* ---- briefing: a filtered read of the SAME record ---- */
-    const BT = [['glance', 'At a glance', 'The six things to know'], ['todo', 'Your to-dos', 'Who needs to do what'], ['arrive', 'On the day', 'Timings, badges, access'], ['stand', 'The stand', 'Layout, bags, leaflets'], ['leads', 'Capturing leads', 'SmartScan and questions'], ['message', 'What to say', 'Objectives and messages'], ['venue', 'Around the venue', 'Neighbours and café'], ['pack', 'Packing down', 'Saturday close']];
+    const BT = [['glance', 'At a glance', 'The six things to know'], ['todo', 'Your to-dos', 'Who needs to do what'], ['arrive', 'On the day', 'Timings, badges, access'], ['stand', 'The stand', 'Layout, bags, leaflets'], ['leads', 'Capturing leads', 'Badge scanner and questions'], ['message', 'What to say', 'Objectives and messages'], ['venue', 'Around the venue', 'Neighbours and café'], ['pack', 'Packing down', 'Saturday close']];
     const btIdx = Math.max(0, BT.findIndex((b) => b[0] === S.briefTab));
     const briefTabs = BT.map((b, i) => { const on = i === btIdx; return { id: b[0], label: b[1], sub: b[2], n: String(i + 1), bg: on ? '#002E38' : 'transparent', fg: on ? '#FFFFFF' : '#002E38', numBg: on ? '#66FF94' : '#F3E9DC', numFg: '#002E38', pick: () => set({ briefTab: b[0] }) }; });
     const bt = {}; BT.forEach((b, i) => { bt[b[0]] = i === btIdx; });
@@ -1788,7 +1967,7 @@ body{background:var(--bg);color:var(--fg)}
       { title: (isMissing(ev.venue) ? 'Venue TBC' : ev.venue) + ', ' + ev.city, sub: ev.address },
       { title: st.number === 'n/a' ? (st.build || 'No fixed stand') : (isMissing(st.number) ? 'Stand TBC' : 'Stand ' + st.number) + (sizeShort && !isMissing(sizeShort) ? ' · ' + sizeShort : ''), sub: st.contractor ? 'Built for you by ' + st.contractor + ' on Thursday - you just arrive and dress it.' : ((st.plan && st.plan[0]) ? st.plan[0][1] : '') },
       { title: 'Arrive ' + (lg.arrival ? lg.arrival.charAt(0).toLowerCase() + lg.arrival.slice(1) : 'time TBC'), sub: lg.badges || '' },
-      { title: /SmartScan/.test(ld.method || '') ? 'Scan every conversation' : 'Capture every lead', sub: ld.method || '' },
+      { title: /scan/i.test(ld.method || '') ? 'Scan every conversation' : 'Capture every lead', sub: ld.method || '' },
       { title: carrier ? carrier.split(' ')[0] + ' brings ' + (ev.carryNote || (ev.merchWith ? 'the leaflets - that’s all we carry' : 'the leaflets')) : 'Leaflets and merch', sub: (ev.merchWith ? 'Bags, bottles and pens are on the stand from ' + ev.merchWith + '. ' : '') + (st.bag && st.bag.length ? 'Every tote bag: ' + st.bag.join(', ') + '.' : '') }
     ].map((g, i) => ({ ...g, n: String(i + 1) }));
     const attIds = (ev.attendees || []).map((a) => resolve(a.p));
@@ -1867,7 +2046,7 @@ body{background:var(--bg);color:var(--fg)}
         clear: () => { const all = Object.assign({}, S.scores || {}); all[id] = {}; set({ scores: all }); } };
     };
     const pill2 = (label, c) => ({ label, bg: c[0], fg: c[1] });
-    const rowId = (p) => slug(p.name) + '-' + (p.date || 'tbc');
+    const rowId = (p) => p.rid || (slug(p.name) + '-' + (p.date || 'tbc'));
     const DEC = S.decide || {};
     const isHidden = (p) => { const d = (DEC[rowId(p)] || {}).d; return d === 'approved' || d === 'declined' || (p.ruledOut && d !== 'restored'); };
     const INIT_ID = (x) => { const k = String(x || '').split('/')[0].trim(); return INITIALS[k.toUpperCase()] || INITIALS[k] || (PEOPLE[k.toLowerCase()] ? k.toLowerCase() : ''); };
@@ -1887,7 +2066,7 @@ body{background:var(--bg);color:var(--fg)}
         standType: tpl === 'exhibition' ? 'Shell scheme' : 'Table with pop-up banners', stand: { build: tpl === 'exhibition' ? 'TBC' : 'Table with pop-up banners', number: tpl === 'exhibition' ? 'TBC' : 'n/a' },
         attendees: bd ? [{ p: bd, days: full(date), travel: 'Self-booked', accom: 'Self-booked', badge: 'Not needed', scanner: false, notes: 'To confirm' }] : [],
         budgetLines: [[tpl === 'exhibition' ? 'Stand' : 'Stand / place', 'Organiser', cost || 0, 0, 'Estimate', p.cost ? String(p.cost) : 'Cost TBC']], merch: {},
-        showLinks: p.link ? [{ label: 'Event page', url: p.link }] : [], fromPipeline: rowId(p), approvedAt: new Date().toISOString() };
+        showLinks: p.link ? [{ label: 'Event page', url: p.link }] : [], briefShared: false, fromPipeline: rowId(p), approvedAt: new Date().toISOString() };
       Promise.resolve(this.createEvent ? this.createEvent(rec) : false).then((ok) => { if (!ok) return; set({ act: null, actErr: '', decide: { ...(S.decide || {}), [rowId(p)]: { d: 'approved', eventId: id } }, screen: 'event', eventId: id, tab: 'overview', taskFilter: 'all', taskCat: 'All' }); });
     };
     const decline = (p, why) => set({ act: null, actErr: '', decide: { ...(S.decide || {}), [rowId(p)]: { d: 'declined', why: String(why || '').trim(), at: new Date().toISOString().slice(0, 10) } } });
@@ -1911,7 +2090,8 @@ body{background:var(--bg);color:var(--fg)}
       return { st: pill2(cur, c), statusOpen: open && canEdit, toggleStatus: () => canEdit && set({ statusOpen: open ? null : rid }),
         statusOpts: PSTAT.map(([label, col]) => ({ label, bg: label === cur ? col[0] : '#FFFFFF', fg: col[1], bd: label === cur ? col[1] : 'rgba(0,46,56,0.14)', pick: () => set({ statusOpen: null, pipeStatus: { ...(S.pipeStatus || {}), [rid]: label } }) })) }; };
     const pipeRow = (p, kind) => { const dc = decide(p.date); const lt = lastOf(p.series);
-      return { ...statusOf(p), isUrgent: !!dc && dc.label === 'Decide now', bucket: bucketOf(p.date), sc: scoreOf(p), canAct: !!this.canEdit, act: actOf(p), meta: [p.type, p.audience, p.location, p.region, p.delegates].filter((x) => x && x !== '-').join(' · '), facts: (p.facts || []).map((f) => ({ f })), hasFacts: !!(p.facts && p.facts.length), contact: p.contact || '', hasContact: !!p.contact, waiting: p.waiting || '', hasWaiting: !!p.waiting, name: p.name, when: p.date && p.dateNote ? p.dateNote : p.date ? full(p.date) : (p.dateNote || p.dateRaw || 'Date TBC'), type: p.type || '-', audience: p.audience || '-', where: [p.location, p.region].filter(Boolean).join(' · ') || '-', bd: p.bd ? namesOf(p.bd.length <= 3 && PEOPLE[p.bd] ? PEOPLE[p.bd].init : p.bd) : '-', mkt: p.mkt ? person(p.mkt).name : '-', cost: typeof p.cost === 'number' ? gbp(p.cost) : (String(p.cost || '-').split(' · ')[0]), notes: p.notes || '', hasNotes: !!p.notes,
+      const openPipe = () => { if (!this.canEdit) return; this._ed = {}; const L = kind === 'Request' ? 'REQUESTS' : 'PIPELINE'; set({ edit: { kind: 'pipe', list: L, idx: (L === 'REQUESTS' ? REQUESTS : PIPELINE).indexOf(p) }, editDraft: {}, editErr: '' }); };
+      return { ...statusOf(p), edit: openPipe, isUrgent: !!dc && dc.label === 'Decide now', bucket: bucketOf(p.date), sc: scoreOf(p), canAct: !!this.canEdit, act: actOf(p), meta: [p.type, p.audience, p.location, p.region, p.delegates].filter((x) => x && x !== '-').join(' · '), facts: (p.facts || []).map((f) => ({ f })), hasFacts: !!(p.facts && p.facts.length), contact: p.contact || '', hasContact: !!p.contact, waiting: p.waiting || '', hasWaiting: !!p.waiting, name: p.name, when: p.date && p.dateNote ? p.dateNote : p.date ? full(p.date) : (p.dateNote || p.dateRaw || 'Date TBC'), type: p.type || '-', audience: p.audience || '-', where: [p.location, p.region].filter(Boolean).join(' · ') || '-', bd: p.bd ? namesOf(p.bd.length <= 3 && PEOPLE[p.bd] ? PEOPLE[p.bd].init : p.bd) : '-', mkt: p.mkt ? person(p.mkt).name : '-', cost: typeof p.cost === 'number' ? gbp(p.cost) : (String(p.cost || '-').split(' · ')[0]), notes: p.notes || '', hasNotes: !!p.notes,
         flag: dc || (p.status ? pill2(p.status, P) : pill2('To decide', N)), srcL: kind === 'Request' ? 'BD request' + (p.bd ? ' · ' + namesOf(p.bd.length <= 3 && PEOPLE[p.bd] ? PEOPLE[p.bd].init : p.bd).split(' / ')[0].split(' ')[0] : '') : 'Marketing', srcBg: kind === 'Request' ? '#FBD9E6' : '#DCEFF1', srcFg: kind === 'Request' ? '#951F51' : '#0B5560', last: lt ? lt.short : '', hasLast: !!lt, link: p.link || '', hasLink: !!p.link, noLink: !p.link, sortKey: p.date || '9999' }; };
     const pipeRows = PIPELINE.filter((p) => !isHidden(p)).map((p) => pipeRow(p, 'Pipeline')).concat(REQUESTS.filter((p) => !isHidden(p)).map((p) => pipeRow(p, 'Request')))
       .filter((r) => r.flag.label !== 'Date passed').sort((a, b) => a.sortKey.localeCompare(b.sortKey));
@@ -1970,7 +2150,7 @@ body{background:var(--bg);color:var(--fg)}
           st.number === 'n/a' ? F('stand.build', 'Stall', 'text', st.build, { required: true }) : F('stand.number', 'Stand number', 'text', st.number, { required: true }),
           F('logistics.arrival', 'Arrival time', 'text', lg.arrival, { required: true }) ] },
         { id: 'action', label: 'Most important pre-event action', icon: 'flag', fields: [
-          F('brief.keyAction', 'The one thing attendees must do before the event', 'text', B.keyAction, { required: true, hint: 'Shown first in the briefing, e.g. “Activate SmartScan before Thursday”' }) ] },
+          F('brief.keyAction', 'The one thing attendees must do before the event', 'text', B.keyAction, { required: true, hint: 'Shown first in the briefing, e.g. “Activate the badge scanner app before Thursday”' }) ] },
         { id: 'team', label: 'Attendees and days', icon: 'users', fields: [
           F('_att', 'Who is attending', 'auto', attendees.map((a) => a.name + ' · ' + a.days).join('\n'), { required: true, ok: attOk, src: 'Attendees tab' }) ] },
         { id: 'travel', label: 'Travel and accommodation', icon: 'car', naable: true, fields: [
@@ -1985,7 +2165,7 @@ body{background:var(--bg);color:var(--fg)}
         { id: 'stand', label: (TPL.standLabel || 'Stand') + ' information', icon: 'grid', naable: true, fields: [
           F('_standinfo', 'Details', 'auto', [st.number && st.number !== 'n/a' ? 'Stand ' + st.number : '', isMissing(sizeS) ? '' : sizeS, st.build].filter(Boolean).join(' · '), { src: (TPL.standLabel || 'Stand') + ' tab' }),
           F('stand.plan', 'How it’s set up (one per line: “Where: what”)', 'list', planLines, { required: true }),
-          F('_render', 'Render or photo', 'auto', st.render ? 'Added' : '', { src: 'Send Claude an image to add one' }) ] },
+          F('_render', 'Render or photo', 'auto', st.render ? 'Added' : '', { src: (TPL.standLabel || 'Stand') + ' tab → Edit' }) ] },
         { id: 'kit', label: 'What we’ve sent and what to bring', icon: 'box', naable: true, fields: [
           F('_assets', 'Leaflets and assets', 'auto', (ev.assets || []).map((a) => a.n + (a.qty ? ' × ' + a.qty : '')).join('\n'), { src: 'Assets tab' }),
           F('_merch', 'Merchandise', 'auto', evMerch.map((m) => m.name + ' × ' + m.here).join('\n'), { src: 'Merchandise tab' }),
@@ -2064,7 +2244,7 @@ body{background:var(--bg);color:var(--fg)}
       const contacts = [
         { k: 'Marketing', name: owner.name, sub: owner.role },
         has((ev.organiser || {}).contact) && { k: 'Organiser', name: (ev.organiser || {}).name || 'Organiser', sub: (ev.organiser || {}).contact },
-        has(lg.emergency) && { k: 'On the day', name: lg.emergency, sub: 'Call 999 in an emergency' } ].filter(Boolean).concat(listV(B.contacts).map((x) => ({ k: 'Also', name: x, sub: '' })));
+        has(lg.emergency) && { k: 'On the day', name: lg.emergency, sub: 'Call 999 in an emergency' } ].filter(Boolean).concat((ev.contacts || []).filter((x) => x.brief).map((x) => ({ k: x.role || 'Contact', name: x.name || x.org || '', sub: [x.org && x.name ? x.org : '', x.email, x.phone, x.note].filter(Boolean).join(' · ') }))).concat(listV(B.contacts).map((x) => ({ k: 'Also', name: x, sub: '' })));
       return {
         bsAreas: areas, bsCur: cur, bsReady: ready, bsNotReady: !ready, bsCanEdit: canEdit, bsReadOnly: !canEdit,
         bsDone: doneCount + '/' + areas.length, bsBlockers: blockers.map((a) => a.label).join(', '),
@@ -2074,7 +2254,7 @@ body{background:var(--bg);color:var(--fg)}
           todos: teamTodos, hasTodos: teamTodos.length > 0,
           travelBooking: B.travelBooking || '', hasTravelBooking: has(B.travelBooking) && B.travelBooking !== 'Not needed' && !naOf('travel'), hotel: B.hotel || '', hasHotel: hotelNeeded,
           website: ev.website || '', hasWebsite: has(ev.website),
-          travelLinks: B.travelLinks || [], hasTravelLinks: !!(B.travelLinks && B.travelLinks.length),
+          travelLinks: B.travelLinks || [], hasTravelLinks: !!(B.travelLinks && B.travelLinks.length), resources: B.resources || [], hasResources: !!(B.resources && B.resources.length),
           travelRows: rows([['Expenses', B.expenses || expDefault], ['Getting there', lg.travel], ['Parking', lg.parking]]),
           dayRows: rows([['Arrive', lg.arrival], ['Opening hours', ev.hours], ['Registration and badges', lg.badges], ['Venue access', lg.access]]),
           setup: listV(lg.setup).map((s, i) => ({ n: String(i + 1), s })), hasSetup: listV(lg.setup).length > 0,
@@ -2085,11 +2265,11 @@ body{background:var(--bg);color:var(--fg)}
           bag: listV(st.bag).map((s) => ({ s })), hasBag: listV(st.bag).length > 0, bagExtra: st.bagExtra || '',
           leadMethod: ld.method || '', code: isMissing(ld.code) || /^n\/a/i.test(String(ld.code)) ? '' : ld.code, hasCode: has(ld.code) && !/^n\/a/i.test(String(ld.code)),
           appLinks: ld.appLinks || [], hasAppLinks: !!(ld.appLinks && ld.appLinks.length), leadSteps: listV(ld.steps).map((s, i) => ({ n: String(i + 1), s })), questions: listV(ld.questions).map((s) => ({ s })), hasQuestions: has(ld.questions), qHead: /form|paper/i.test(String(ld.method || '')) && !/scan/i.test(String(ld.method || '')) ? 'On the lead form' : 'After each scan (optional)', qHint: /form|paper/i.test(String(ld.method || '')) && !/scan/i.test(String(ld.method || '')) ? 'What the form asks for. Fill it in with the visitor while you chat, and write clearly so it can go straight into D365.' : 'Don’t read these out. Answer them yourself from the conversation.',
-          objective: ev.objective || '', audience: ev.audience || '', hasAudience: has(ev.audience), messages: listV(ev.messaging).map((s) => ({ s })),
+          objective: ev.objective || '', audience: [audLine(ev), arr0(ev.roles).join(', '), arr0(ev.settings).length ? '' : ev.audience].filter(Boolean).join(' · ') || ev.audience || '', hasAudience: has(ev.audience) || arr0(ev.settings).length > 0 || arr0(ev.phases).length > 0, messages: listV(ev.messaging).map((s) => ({ s })),
           proof: listV(ev.proof).map((s) => ({ s })), hasProof: has(ev.proof), cta: B.cta || '', hasCta: has(B.cta),
           rivals: (ev.competitors || []).map((x) => ({ name: x[0], stand: x[1], level: x[2], note: x[3], direct: /direct/i.test(x[2]), lvBg: /direct|main/i.test(x[2]) ? '#FBD9E6' : '#F3E9DC', lvFg: /direct|main/i.test(x[2]) ? '#951F51' : '#4D6166' })), rivalCount: String((ev.competitors || []).length), rivalNote: ev.competitorsNote || '', hasRivalNote: has(ev.competitorsNote),
           info: listV(ev.showInfo).map((s) => ({ s })), hasInfo: has(ev.showInfo), infoRows: rows([['Food and drink', lg.catering], ['Neighbouring stands', lg.nearby]]),
-          links: ev.showLinks || [], hasLinks: !!(ev.showLinks && ev.showLinks.length),
+          links: (ev.showLinks || []).concat((ev.files || []).filter((fl) => fl.brief !== false).map((fl) => ({ label: fl.label, url: fl.url }))), hasLinks: !!((ev.showLinks && ev.showLinks.length) || (ev.files || []).some((fl) => fl.brief !== false)),
           afterRows: rows([['Breakdown', [lg.breakdownDate ? full(lg.breakdownDate) : '', lg.breakdownTime].filter(Boolean).join(' · ')], ['How to pack down', lg.breakdownNotes], ['Leftover stock', B.leftovers], ['Your leads', B.leadHandover]]),
           contacts },
         bvTabs, bvOn, bvHasPrev: secIdx > 0, bvHasNext: secIdx < SECT.length - 1, bvPrev: bvTabs[Math.max(0, secIdx - 1)], bvNext: bvTabs[Math.min(SECT.length - 1, secIdx + 1)]
@@ -2135,6 +2315,107 @@ body{background:var(--bg);color:var(--fg)}
       out.taskEdit = (key) => open({ kind: 'task', key });
       out.personEdit = (pid) => open({ kind: 'person', pid });
       out.merchEdit = (mid) => open({ kind: 'merch', mid });
+      /* ---- section editors: every tab's fields, required set by event type ---- */
+      const isConfE = ev.template === 'conference';
+      const TPLE = tplOf(ev); const SFE = TPLE.standFields || ['number', 'size', 'build', 'supplier', 'signoff'];
+      const gp = (o, path) => path.split('.').reduce((a, k) => (a && a[k] !== undefined ? a[k] : undefined), o);
+      const sp = (o, path, v) => { const ks = path.split('.'); let t = o; ks.slice(0, -1).forEach((k) => { t[k] = t[k] && typeof t[k] === 'object' && !Array.isArray(t[k]) ? t[k] : {}; t = t[k]; }); t[ks[ks.length - 1]] = v; };
+      const MKTP = Object.keys(PEOPLE).filter((id) => PEOPLE[id].team === 'Marketing');
+      const ALLP2 = Object.keys(PEOPLE).filter((id) => PEOPLE[id].team !== 'To identify');
+      const pOpt2 = (ids) => ids.map((id) => ({ v: id, label: PEOPLE[id].name }));
+      const attP = (ev.attendees || []).map((a) => a.p);
+      const S_ = (k, label, type, o) => Object.assign({ k, label, type }, o || {});
+      const linksIn = (v) => (v || []).map((l) => l.label + ' | ' + l.url).join('\n');
+      const linksOut = (s) => String(s).split('\n').map((x) => x.trim()).filter(Boolean).map((x) => { const i = x.lastIndexOf('|'); return i > 0 ? { label: x.slice(0, i).trim(), url: x.slice(i + 1).trim() } : { label: x.replace(/^https?:\/\//, '').split('/')[0], url: x }; });
+      const SECS = {
+        about: { title: 'Summary, objectives and organiser', fields: [
+          S_('summary', 'Event summary', 'area', { req: true, hint: 'Two or three sentences: what it is, who goes, why it matters' }),
+          S_('objective', 'Main objective', 'area', { req: true }),
+          S_('objectives', 'Goals (one per line)', 'list'),
+          S_('organiser.name', 'Organiser', 'text', { req: true }),
+          S_('organiser.contact', 'Organiser contact (name · email)', 'text', { req: true }),
+          S_('website', 'Event website', 'text', { req: true }),
+          S_('showLinks', 'Useful links (one per line: Label | https://…)', 'links', { hint: 'e.g. Programme | https://… Shown in the briefing' }),
+          S_('brief.resources', 'Videos and files to have ready (one per line: Label | https://…)', 'links', { hint: 'e.g. Tute lesson video | https://… Shown under Bring with you' }),
+          S_('logo', 'Event logo', 'upload', { hint: 'Shown to the BD team on their event list' }) ] },
+        logistics: { title: 'Logistics', fields: (isConfE ? [
+          S_('logistics.arrival', 'Arrival time', 'text', { req: true }),
+          S_('logistics.buildTime', 'Setting up (when and where)', 'text', { req: true }),
+          S_('logistics.breakdownTime', 'Pack-down time', 'text', { req: true }),
+          S_('logistics.collateralWith', 'Who brings the banners and leaflets', 'chips', { req: true, options: pOpt2(ALLP2) }),
+          S_('logistics.courier', 'Courier', 'text'), S_('logistics.courierSupplier', 'Kit notes', 'text') ] : [
+          S_('logistics.buildDate', 'Build date', 'date', { req: true }), S_('logistics.buildTime', 'Build time and who builds', 'text', { req: true }),
+          S_('logistics.arrival', 'Exhibitor arrival time', 'text', { req: true }),
+          S_('logistics.breakdownDate', 'Breakdown date', 'date', { req: true }), S_('logistics.breakdownTime', 'Breakdown time', 'text', { req: true }),
+          S_('logistics.contractor', 'Stand contractor', 'text', { req: true }),
+          S_('logistics.collateralWith', 'Who brings the printed leaflets', 'chips', { options: pOpt2(ALLP2) }),
+          S_('logistics.courierSupplier', 'How the stand kit and merch get there', 'text', { req: true }),
+          S_('logistics.courier', 'Courier', 'text'), S_('logistics.storage', 'Storage on site', 'text') ]).concat([
+          S_('logistics.badges', 'Registration and badges', 'area', { req: true }),
+          S_('logistics.travel', 'Getting there', 'area', { req: true }), S_('logistics.parking', 'Parking', 'area'),
+          S_('logistics.access', 'Venue access', 'area'), S_('logistics.setup', 'Setup steps on the day (one per line)', 'list'),
+          S_('logistics.breakdownNotes', 'Pack-down instructions', 'area', { req: true }),
+          S_('logistics.catering', 'Food and drink', 'area'), S_('logistics.emergency', 'On-the-day contact / emergency', 'text') ]) },
+        stand: { title: (TPLE.standLabel || 'Stand') + ' details', fields: [
+          SFE.includes('number') && S_('stand.number', 'Stand number', 'text', { req: true, hint: 'Type n/a if there’s no numbered stand' }),
+          S_('stand.size', (TPLE.standLabel || 'Stand') + ' size', 'text', { req: !isConfE }),
+          S_('standType', 'Stand type', 'chips', { req: true, options: ['Shell scheme', 'Space only', 'Table', 'Roller banners', 'Pop-up stand', 'Delegate only'].map((x) => ({ v: x, label: x })) }),
+          SFE.includes('build') && S_('stand.build', isConfE ? 'What we have (e.g. table and 2 roller banners)' : 'Build notes', 'text', { req: isConfE }),
+          SFE.includes('supplier') && S_('stand.supplier', 'Stand supplier', 'text'),
+          SFE.includes('signoff') && S_('stand.signoff', 'Final sign-off', 'chips', { options: ['Not signed off', 'Signed off'].map((x) => ({ v: x, label: x })) }),
+          !isConfE && S_('stand.items', 'Stand checklist (one per line: Item · Status · Note)', 'list', { hint: 'Status e.g. Ordered, Confirmed, To order', inF: (v) => (v || []).map((x) => x.join(' · ')), outF: (s) => s.map((l) => { const p = l.split(' · '); return [p[0] || '', p[1] || 'To order', p.slice(2).join(' · ')]; }) }),
+          S_('stand.plan', 'How it’s set up (one per line: Where: what)', 'list', { inF: (v) => (v || []).map((p) => p[0] + ': ' + p[1]), outF: (s) => s.map((l) => { const i = l.indexOf(':'); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['', l]; }) }),
+          !isConfE && S_('stand.bag', 'In every tote bag (one per line)', 'list'),
+          !isConfE && S_('stand.prePack', 'Bags to pre-pack', 'number'),
+          S_('stand.render', 'Stand render or photo', 'upload', { hint: 'Shown in the attendee briefing' }),
+          S_('stand.floorplan', 'Floorplan (image or PDF)', 'upload', { accept: 'image/*,application/pdf' }), S_('stand.listing', 'Exhibitor listing link', 'text') ].filter(Boolean) },
+        lead: { title: 'Lead capture', fields: [
+          S_('lead.method', 'Capture method', 'text', { req: true, hint: 'e.g. Badge scanner app (organiser’s), paper lead form, QR code to a form' }),
+          S_('lead.scanner', 'Tool and cost', 'text', { hint: 'e.g. Included with stand, or ordered £195 + VAT' }),
+          S_('lead.code', 'Activation code or login', 'text', { hint: 'Type n/a if none is needed' }),
+          S_('lead.access', 'Who can capture leads', 'multi', { options: pOpt2(attP.length ? attP : ALLP2) }),
+          S_('lead.steps', 'Setup steps (one per line)', 'list', { req: true }),
+          S_('lead.questions', 'Questions to ask or tap (one per line)', 'list'),
+          S_('lead.appLinks', 'App links (one per line: Label | https://…)', 'links'),
+          S_('lead.hubLinks', 'Exhibitor hub links, Marketing only (Label | https://…)', 'links'),
+          S_('lead.exportStatus', 'Post-event export', 'text', { req: true }),
+          S_('lead.crm', 'Leads into D365', 'text', { req: true }),
+          S_('lead.followUp', 'Follow-up owner', 'chips', { req: true, options: pOpt2(ALLP2) }) ] },
+        merch: { title: 'Merchandise for this event', fields: MERCH.map((m) => S_('merch.' + m.id, m.name + ' (of ' + m.total + ' in stock)', 'number')).concat(MERCH.map((m) => S_('merchNotes.' + m.id, m.name + ' note', 'text')), [S_('merchWith', 'Where the merch is (e.g. With Creative Spaces Design)', 'text')]) }
+      };
+      const secVal = (f) => { const v = gp(ev, f.k); if (f.inF) return f.inF(v).join('\n'); if (f.type === 'list') return (v || []).join('\n'); if (f.type === 'links') return linksIn(v); if (f.type === 'multi') return arr0(v); return v === undefined || v === null ? '' : v; };
+      const secMissing = (sid) => SECS[sid].fields.filter((f) => f.req && (f.type === 'list' || f.type === 'multi' ? !arr0(gp(ev, f.k)).length : isMissing(gp(ev, f.k)))).map((f) => f.label.replace(/ \(.*\)$/, ''));
+      out.secs = {}; Object.keys(SECS).forEach((sid) => { const m = secMissing(sid); out.secs[sid] = { edit: open({ kind: 'section', sec: sid }), missing: m.length, hasMissing: m.length > 0 && canEdit, missingL: m.length + ' to add', list: m.join(', ') }; });
+      out.addAsset = open({ kind: 'asset', idx: -1 });
+      out.addPipe = open({ kind: 'pipe', list: 'PIPELINE', idx: -1 });
+      out.addFile = open({ kind: 'file', idx: -1 });
+      const SH = STOCK && STOCK.holders ? STOCK.holders : [];
+      out.hasStock = !!STOCK; out.noStock = !STOCK;
+      out.stockHead = MERCH.map((m) => ({ name: m.name }));
+      out.stockRows = SH.map((h) => { const held = (STOCK.held || {})[h.id] || {}; const any = MERCH.some((m) => Number(held[m.id]) > 0);
+        return { name: h.name, note: h.note || '', counts: MERCH.map((m) => ({ v: held[m.id] === undefined || held[m.id] === null ? 'To count' : String(held[m.id]) })), isOffice: h.id === 'office', canReturn: canEdit && h.id !== 'office' && any,
+          giveBack: open({ kind: 'stock', mode: 'move', from: h.id, to: 'office', all: true }), use: open({ kind: 'stock', mode: 'out', from: h.id }), count: open({ kind: 'stock', mode: 'count', from: h.id }) }; });
+      out.stockLog = ((STOCK && STOCK.log) || []).slice(-8).reverse().map((l) => ({ when: l.at ? full(String(l.at).slice(0, 10)) : '', what: l.text || '' }));
+      out.hasStockLog = out.stockLog.length > 0;
+      out.stockMove = open({ kind: 'stock', mode: 'move' }); out.stockIn = open({ kind: 'stock', mode: 'in' }); out.stockAddHolder = open({ kind: 'stockholder' });
+      out.addContact = open({ kind: 'contact', idx: -1 });
+      out.contactRows = (ev.contacts || []).map((x, i) => ({ role: x.role || 'Contact', name: x.name || x.org || x.email, org: x.name ? (x.org || '') : '', email: x.email || '', hasEmail: !!x.email, mail: 'mailto:' + (x.email || ''), phone: x.phone || '', note: x.note || '', briefL: x.brief ? 'In briefing' : 'Marketing only', briefBg: x.brief ? '#DCEFF1' : '#F3E9DC', edit: open({ kind: 'contact', idx: i }) }));
+      out.hasContacts = (ev.contacts || []).length > 0; out.noContacts = !(ev.contacts || []).length;
+      out.fileRows = (ev.files || []).map((fl, i) => ({ label: fl.label, url: fl.url, isImg: /\.(jpe?g|png|webp|gif)$/i.test(fl.url), isDoc: !/\.(jpe?g|png|webp|gif)$/i.test(fl.url), briefL: fl.brief !== false ? 'In briefing' : 'Marketing only', briefBg: fl.brief !== false ? '#DCEFF1' : '#F3E9DC', edit: open({ kind: 'file', idx: i }) }));
+      out.hasFiles = (ev.files || []).length > 0; out.noFiles = !(ev.files || []).length;
+      out.logo = ev.logo || ''; out.hasLogo = !!ev.logo;
+      const detReq = [['Venue', ev.venue], ['Address', ev.address], ['Opening hours', ev.hours], ['BD owner', ev.bd], ['Settings', arr0(ev.settings).length ? 'y' : ''], ['Phase', arr0(ev.phases).length ? 'y' : '']].filter((x) => isMissing(x[1])).map((x) => x[0]);
+      const recRow = (label, miss, edit, tabId) => ({ label, ok: !miss.length, statusL: miss.length ? miss.length + ' to add' : 'Complete', bg: miss.length ? '#FBD9E6' : '#D6F7E1', fg: miss.length ? '#951F51' : '#0B6433', list: miss.length ? miss.join(', ') : 'Everything required is filled in', edit: canEdit ? edit : () => set({ tab: tabId }) });
+      out.secList = [recRow('Event details and audience', detReq, open({ kind: 'event' }), 'overview'),
+        recRow('Summary and organiser', secMissing('about'), out.secs.about.edit, 'overview'),
+        recRow('Attendees', (ev.attendees || []).length ? [] : ['At least one attendee'], open({ kind: 'attendee', idx: -1 }), 'attendees'),
+        recRow('Contacts', (ev.contacts || []).some((x) => x.role === 'Organiser') ? [] : ['Organiser contact'], open({ kind: 'contact', idx: -1 }), 'overview'),
+        recRow('Logistics', secMissing('logistics'), out.secs.logistics.edit, 'logistics'),
+        recRow(SECS.stand.title, secMissing('stand'), out.secs.stand.edit, 'stand'),
+        recRow('Lead capture', secMissing('lead'), out.secs.lead.edit, 'leads'),
+        recRow('Budget', (ev.budgetLines || []).length ? [] : ['At least one cost line'], open({ kind: 'budget', idx: -1 }), 'budget')];
+      out.recDone = out.secList.filter((r) => r.ok).length + ' of ' + out.secList.length + ' complete';
+      out.assetEdits = (ev.assets || []).map((a, i) => open({ kind: 'asset', idx: i }));
       if (!E || !canEdit) return out;
       const dr = this._ed || (this._ed = {}); const chips = S.editDraft || {};
       const evE = E.kind === 'person' || E.kind === 'merch' ? null : EVENTS.find((e) => e.id === S.eventId);
@@ -2145,7 +2426,7 @@ body{background:var(--bg);color:var(--fg)}
       const pOpt = (ids) => ids.map((id) => ({ v: id, label: PEOPLE[id].name }));
       const F = (k, label, type, value, extra) => Object.assign({ k, label, type, value: value === undefined || value === null ? '' : value }, extra || {});
       let title = '', fields = [], save = null, del = null, delL = 'Delete';
-      const get = (f) => { if (f.type === 'chips') return chips[f.k] !== undefined ? chips[f.k] : f.value; const el = document.getElementById('ed-' + f.k); const v = el ? el.value : (dr[f.k] !== undefined ? dr[f.k] : f.value); return f.type === 'number' ? (v === '' ? 0 : Number(String(v).replace(/[£,\s]/g, ''))) : String(v).trim(); };
+      const get = (f) => { if (f.type === 'upload') return chips[f.k] !== undefined ? chips[f.k] : f.value; if (f.type === 'multi') return (chips[f.k] !== undefined ? chips[f.k] : f.value).slice(); if (f.type === 'chips') return chips[f.k] !== undefined ? chips[f.k] : f.value; const el = document.getElementById('ed-' + f.k); const v = el ? el.value : (dr[f.k] !== undefined ? dr[f.k] : f.value); return f.type === 'number' ? (v === '' ? 0 : Number(String(v).replace(/[£,\s]/g, ''))) : String(v).trim(); };
       const vals = () => { const o = {}; fields.forEach((f) => { o[f.k] = get(f); }); return o; };
       const done = () => { this._ed = {}; set({ edit: null, editDraft: {}, editErr: '' }); };
       const err = (m) => set({ editErr: m });
@@ -2154,15 +2435,115 @@ body{background:var(--bg);color:var(--fg)}
         const st = evE.stand || {};
         title = 'Edit event details';
         fields = [F('name', 'Event name', 'text', evE.name), F('short', 'Short name (menu)', 'text', evE.short), F('start', 'Start date', 'date', evE.start), F('end', 'End date', 'date', evE.end),
-          F('hours', 'Opening hours', 'text', evE.hours), F('venue', 'Venue', 'text', evE.venue), F('city', 'Town or city', 'text', evE.city), F('address', 'Address', 'text', evE.address), F('website', 'Event website', 'text', evE.website),
+          F('hours', 'Opening hours *', 'text', evE.hours), F('venue', 'Venue *', 'text', evE.venue), F('city', 'Town or city', 'text', evE.city), F('address', 'Address *', 'text', evE.address), F('website', 'Event website', 'text', evE.website),
           F('booking', 'Booking status', 'chips', evE.booking || 'To book', { options: ['To book', 'Booked', 'Confirmed', 'Cancelled'].map((x) => ({ v: x, label: x })) }),
           F('budgetApproved', 'Budget approved', 'chips', !!evE.budgetApproved, { options: yn }),
-          F('bd', 'BD owner', 'chips', evE.bd || '', { options: pOpt(BDS) }), F('owner', 'Marketing owner', 'chips', evE.owner || '', { options: pOpt(MKT) }),
-          F('audience', 'Audience', 'text', evE.audience), F('standNumber', (TPL.standLabel || 'Stand') + ' number', 'text', st.number), F('standSize', (TPL.standLabel || 'Stand') + ' size', 'text', st.size), F('standType', 'Stand type', 'text', evE.standType),
-          F('summary', 'Summary', 'area', evE.summary), F('objective', 'Objective', 'area', evE.objective)];
+          F('bd', 'BD owner *', 'chips', evE.bd || '', { options: pOpt(BDS) }), F('owner', 'Marketing owner', 'chips', evE.owner || '', { options: pOpt(MKT) }),
+          F('settings', 'Settings (pick all that apply) *', 'multi', arr0(evE.settings), { options: AUD_SET.map((x) => ({ v: x, label: x })) }), F('phases', 'Phase *', 'multi', arr0(evE.phases), { options: AUD_PHASE.map((x) => ({ v: x, label: x })) }), F('roles', 'Roles we want to meet', 'multi', arr0(evE.roles), { options: AUD_ROLE.map((x) => ({ v: x, label: x })) }), F('audience', 'Audience notes', 'text', evE.audience), F('standNumber', (TPL.standLabel || 'Stand') + ' number', 'text', st.number), F('standSize', (TPL.standLabel || 'Stand') + ' size', 'text', st.size), F('standType', 'Stand type', 'text', evE.standType),
+          F('budget', 'Total event budget (£, ex VAT)', 'number', evE.budget || ''), F('summary', 'Summary', 'area', evE.summary), F('objective', 'Objective', 'area', evE.objective)];
         save = () => { const v = vals(); if (!v.name) return err('Add an event name.'); if (!/^\d{4}-\d{2}-\d{2}$/.test(v.start)) return err('Add a start date.'); const end = v.end && v.end >= v.start ? v.end : v.start;
-          const patch = { name: v.name, short: v.short || v.name, start: v.start, end, term: termOf(v.start), hours: v.hours, venue: v.venue, city: v.city, address: v.address, website: v.website, booking: v.booking, budgetApproved: !!v.budgetApproved, bd: v.bd, owner: v.owner, audience: v.audience, standType: v.standType, summary: v.summary, objective: v.objective, stand: { number: v.standNumber, size: v.standSize } };
+          const patch = { name: v.name, short: v.short || v.name, start: v.start, end, term: termOf(v.start), hours: v.hours, venue: v.venue, city: v.city, address: v.address, website: v.website, booking: v.booking, budgetApproved: !!v.budgetApproved, bd: v.bd, owner: v.owner, audience: v.audience, settings: v.settings, phases: v.phases, roles: v.roles, standType: v.standType, summary: v.summary, objective: v.objective, budget: v.budget || 0, stand: { number: v.standNumber, size: v.standSize } };
           this.patchEvent && this.patchEvent(evE.id, patch); done(); };
+      }
+      if (E.kind === 'section' && SECS[E.sec]) {
+        const SEC = SECS[E.sec]; title = SEC.title;
+        fields = SEC.fields.map((f) => F(f.k, f.label + (f.req ? ' *' : ''), f.type, secVal(f), { options: f.options, hint: f.hint, accept: f.accept, sec: f }));
+        save = () => { const patch = {};
+          fields.forEach((fd) => { const f = fd.sec; let v = get(fd);
+            if (f.type === 'list') { v = String(v).split('\n').map((x) => x.trim()).filter(Boolean); if (f.outF) v = f.outF(v); }
+            else if (f.type === 'links') v = linksOut(v);
+            sp(patch, f.k, v); });
+          this.patchEvent && this.patchEvent(ev.id, patch); done(); };
+      }
+      if (E.kind === 'asset') {
+        const effStage = (a, i) => { const k = ev.id + '-a' + i; return S.assetStage[k] !== undefined ? S.assetStage[k] : (a.stage || 0); };
+        const arr = (ev.assets || []).map((a, i) => Object.assign({}, a, { stage: effStage(a, i) }));
+        const a = E.idx >= 0 ? arr[E.idx] : { n: '', type: 'Printed collateral', qty: '', owner: ev.owner, supplier: '', deadline: '', dest: '', delivery: 'Not dispatched', stage: 0, note: '', link: '' };
+        const TYPES = ['Printed collateral', 'Banner or signage', 'Print advert', 'Digital', 'Presentation', 'Other'];
+        title = E.idx >= 0 ? 'Edit asset' : 'Add an asset';
+        fields = [F('n', 'Asset *', 'text', a.n), F('type', 'Type *', 'chips', a.type, { options: TYPES.map((x) => ({ v: x, label: x })) }), F('qty', 'Quantity', 'number', a.qty),
+          F('owner', 'Owner *', 'chips', a.owner, { options: pOpt2(MKTP) }), F('stage', 'Status', 'chips', a.stage || 0, { options: STAGES.map((x, k) => ({ v: k, label: x })) }),
+          F('supplier', 'Printer or supplier', 'text', a.supplier), F('deadline', 'Deadline *', 'date', a.deadline), F('dest', 'Where it goes (who or what address)', 'text', a.dest),
+          F('delivery', 'Delivery', 'chips', a.delivery || 'Not dispatched', { options: ['Not dispatched', 'In transit', 'Delivered', 'Received', 'Not needed'].map((x) => ({ v: x, label: x })) }),
+          F('file', 'Artwork file (image or PDF)', 'upload', a.file, { accept: 'image/*,application/pdf' }), F('link', 'Or a link to the artwork (Canva, SharePoint…)', 'text', a.link), F('note', 'Notes', 'text', a.note)];
+        const clean = () => { const o = {}; Object.keys(S.assetStage || {}).forEach((k) => { if (k.indexOf(ev.id + '-a') !== 0) o[k] = S.assetStage[k]; }); return o; };
+        save = () => { const v = vals(); if (!v.n) return err('Name the asset.'); const row = Object.assign({}, a, { n: v.n, type: v.type, qty: v.qty || 0, owner: v.owner, stage: Number(v.stage) || 0, supplier: v.supplier, deadline: v.deadline, dest: v.dest, delivery: v.delivery, link: v.link, file: v.file, note: v.note });
+          if (E.idx >= 0) arr[E.idx] = row; else arr.push(row); this.patchEvent && this.patchEvent(ev.id, { assets: arr }); this._ed = {}; set({ assetStage: clean(), edit: null, editDraft: {}, editErr: '' }); };
+        if (E.idx >= 0) del = () => { arr.splice(E.idx, 1); this.patchEvent && this.patchEvent(ev.id, { assets: arr }); this._ed = {}; set({ assetStage: clean(), edit: null, editDraft: {}, editErr: '' }); };
+        delL = 'Delete asset';
+      }
+      if (E.kind === 'pipe') {
+        const LIST = E.list === 'REQUESTS' ? REQUESTS : PIPELINE; const arr = LIST.slice();
+        const p = E.idx >= 0 ? arr[E.idx] : { name: '', date: '', type: 'Conference', region: '', bd: '', mkt: 'kb', facts: [], cost: '' };
+        const REG = ['North', 'Central', 'South West', 'South East', 'London', 'National'];
+        title = E.idx >= 0 ? 'Edit pipeline event' : 'Add an event to the pipeline';
+        fields = [F('name', 'Event name *', 'text', p.name), F('date', 'Date *', 'date', p.date), F('end', 'End date (if more than a day)', 'date', p.end), F('dateNote', 'Date note (e.g. Summer 2027 TBC)', 'text', p.dateNote),
+          F('type', 'Type *', 'chips', p.type || 'Conference', { options: ['Conference', 'Exhibition', 'Other'].map((x) => ({ v: x, label: x })) }),
+          F('location', 'Venue and town *', 'text', p.location), F('region', 'Region *', 'chips', p.region || '', { options: REG.map((x) => ({ v: x, label: x })) }),
+          F('audience', 'Audience *', 'text', p.audience), F('delegates', 'Delegate numbers', 'text', p.delegates), F('cost', 'Cost (e.g. £600 + VAT)', 'text', typeof p.cost === 'number' ? '£' + p.cost : p.cost),
+          F('bd', 'BD lead', 'chips', PEOPLE[p.bd] ? p.bd : '', { options: pOpt(BDS) }), F('link', 'Event link', 'text', p.link), F('contact', 'Organiser contact', 'text', p.contact),
+          F('facts', 'What we know (one per line)', 'list', (p.facts || []).join('\n')), F('waiting', 'Waiting on', 'text', p.waiting), F('notes', 'Notes', 'area', p.notes)];
+        save = () => { const v = vals(); if (!v.name) return err('Add the event name.'); const rid = rowId(p);
+          const costN = /^£?\s*[\d,]+(\.\d+)?$/.test(String(v.cost).trim()) ? Number(String(v.cost).replace(/[£,\s]/g, '')) : (v.cost || null);
+          const row = Object.assign({}, p, { name: v.name, date: v.date, end: v.end || undefined, dateNote: v.dateNote, type: v.type, location: v.location, region: v.region, audience: v.audience, delegates: v.delegates, cost: costN, bd: v.bd || p.bd || '', link: v.link, contact: v.contact,
+            facts: String(v.facts).split('\n').map((x) => x.trim()).filter(Boolean), waiting: v.waiting, notes: v.notes });
+          if (E.idx >= 0) { if (p.name) row.rid = rid; arr[E.idx] = row; } else arr.push(row);
+          this.patchMaster && this.patchMaster({ [E.list]: JSON.parse(JSON.stringify(arr)) }); done(); };
+        if (E.idx >= 0) del = () => { arr.splice(E.idx, 1); this.patchMaster && this.patchMaster({ [E.list]: arr }); done(); };
+        delL = 'Remove from pipeline';
+      }
+      if (E.kind === 'file') {
+        const arr = (ev.files || []).slice(); const fl = E.idx >= 0 ? arr[E.idx] : { label: '', url: '', brief: true };
+        title = E.idx >= 0 ? 'Edit file' : 'Add an image or file';
+        fields = [F('url', 'File (image or PDF) *', 'upload', fl.url, { accept: 'image/*,application/pdf' }), F('label', 'Name it *', 'text', fl.label, { hint: 'e.g. Final timetable, Floorplan, Parking map' }),
+          F('brief', 'Show in the attendee briefing?', 'chips', fl.brief !== false, { options: yn })];
+        save = () => { const v = vals(); if (!v.url) return err('Choose a file to upload.'); if (!v.label) return err('Give the file a name.'); const row = { label: v.label, url: v.url, brief: !!v.brief, at: fl.at || new Date().toISOString().slice(0, 10) };
+          if (E.idx >= 0) arr[E.idx] = row; else arr.push(row); this.patchEvent && this.patchEvent(ev.id, { files: arr }); done(); };
+        if (E.idx >= 0) del = () => { arr.splice(E.idx, 1); this.patchEvent && this.patchEvent(ev.id, { files: arr }); done(); };
+        delL = 'Remove file';
+      }
+      if (E.kind === 'contact') {
+        const arr = (ev.contacts || []).slice(); const ct = E.idx >= 0 ? arr[E.idx] : { role: 'Organiser', name: '', org: '', email: '', phone: '', note: '', brief: true };
+        title = E.idx >= 0 ? 'Edit contact' : 'Add a contact';
+        fields = [F('role', 'What they’re for *', 'chips', ct.role, { options: CT_ROLES.map((x) => ({ v: x, label: x })) }), F('name', 'Name', 'text', ct.name), F('org', 'Organisation', 'text', ct.org, { hint: 'e.g. GovNet, NEC, Creative Spaces Design' }),
+          F('email', 'Email', 'text', ct.email), F('phone', 'Phone', 'text', ct.phone), F('note', 'Notes', 'text', ct.note, { hint: 'e.g. Send invoices to, Contact on the day for power issues' }),
+          F('brief', 'Show to attendees in the briefing?', 'chips', ct.brief !== false, { options: yn })];
+        save = () => { const v = vals(); if (!v.name && !v.org && !v.email) return err('Add a name, organisation or email.'); const row = { role: v.role || 'Other', name: v.name, org: v.org, email: v.email, phone: v.phone, note: v.note, brief: !!v.brief };
+          if (E.idx >= 0) arr[E.idx] = row; else arr.push(row); this.patchEvent && this.patchEvent(ev.id, { contacts: arr }); done(); };
+        if (E.idx >= 0) del = () => { arr.splice(E.idx, 1); this.patchEvent && this.patchEvent(ev.id, { contacts: arr }); done(); };
+        delL = 'Remove contact';
+      }
+      if (E.kind === 'stock' || E.kind === 'stockholder') {
+        const ST = JSON.parse(JSON.stringify(STOCK || { holders: [{ id: 'office', name: 'Office' }], held: { office: {} }, log: [] }));
+        const hOpt = ST.holders.map((h) => ({ v: h.id, label: h.name }));
+        const nm = (id) => (ST.holders.find((h) => h.id === id) || {}).name || id;
+        const qtyText = (q) => MERCH.filter((m) => q[m.id]).map((m) => q[m.id] + ' ' + m.name.toLowerCase()).join(', ');
+        const stamp = (text) => { ST.log = (ST.log || []).concat([{ at: new Date().toISOString(), text }]).slice(-60); };
+        const commit = () => { this.patchMaster && this.patchMaster({ STOCK: ST }); done(); };
+        if (E.kind === 'stockholder') {
+          title = 'Add somewhere stock is kept';
+          fields = [F('person', 'A person (e.g. a BD who carries stock)', 'chips', '', { options: pOpt(ALLP) }), F('name', 'Or a place or supplier (e.g. Creative Spaces Design)', 'text', ''), F('note', 'Note', 'text', '')];
+          save = () => { const v = vals(); const id = v.person || slug(v.name); const name = v.person ? PEOPLE[v.person].name : v.name; if (!id || !name) return err('Pick a person or type a name.'); if (ST.holders.some((h) => h.id === id)) return err('That’s already on the list.');
+            ST.holders.push({ id, name, note: v.note }); ST.held[id] = {}; stamp('Added ' + name + ' as a stock holder'); commit(); };
+        } else {
+          const mode = E.mode; const held = (id) => ST.held[id] || (ST.held[id] = {});
+          const qf = MERCH.map((m) => F('q_' + m.id, m.name + (mode === 'count' ? ' (how many they have now)' : ''), 'number', mode === 'count' ? ((ST.held[E.from] || {})[m.id] ?? '') : E.all ? ((ST.held[E.from] || {})[m.id] || '') : ''));
+          title = mode === 'move' ? (E.to === 'office' && E.from ? 'Return stock to the office' : 'Move stock') : mode === 'in' ? 'New stock arrived' : mode === 'out' ? 'Stock used or given away' : 'Update the count';
+          fields = (mode === 'move' ? [F('from', 'From *', 'chips', E.from || 'office', { options: hOpt }), F('to', 'To *', 'chips', E.to || '', { options: hOpt })] : mode === 'in' ? [F('to', 'Delivered to *', 'chips', E.to || 'office', { options: hOpt })] : [F('from', mode === 'count' ? 'Who or where *' : 'Used by *', 'chips', E.from || '', { options: hOpt })])
+            .concat(qf, [F('note', mode === 'out' ? 'Which event?' : 'Note', 'text', '', { hint: mode === 'in' ? 'e.g. Order from supplier, 50 bottles' : '' })]);
+          save = () => { const v = vals(); const q = {}; MERCH.forEach((m) => { const n = Number(v['q_' + m.id]) || 0; if (n > 0 || mode === 'count') q[m.id] = n; });
+            if (mode !== 'count' && !Object.keys(q).length) return err('Add at least one quantity.');
+            if ((mode === 'move' || mode === 'out' || mode === 'count') && !v.from) return err('Pick who has it.'); if ((mode === 'move' || mode === 'in') && !v.to) return err('Pick where it’s going.');
+            if (mode === 'move' && v.from === v.to) return err('Pick two different places.');
+            if (mode === 'move' || mode === 'out') { const short = MERCH.filter((m) => q[m.id] > (Number(held(v.from)[m.id]) || 0)); if (short.length) return err(nm(v.from) + ' only has ' + short.map((m) => (held(v.from)[m.id] || 0) + ' ' + m.name.toLowerCase()).join(', ') + '. Update their count first if that’s wrong.'); }
+            MERCH.forEach((m) => { const n = q[m.id]; if (n === undefined) return;
+              if (mode === 'count') held(v.from)[m.id] = n;
+              if (mode === 'in') held(v.to)[m.id] = (Number(held(v.to)[m.id]) || 0) + n;
+              if (mode === 'out') held(v.from)[m.id] = (Number(held(v.from)[m.id]) || 0) - n;
+              if (mode === 'move') { held(v.from)[m.id] = (Number(held(v.from)[m.id]) || 0) - n; held(v.to)[m.id] = (Number(held(v.to)[m.id]) || 0) + n; } });
+            stamp(mode === 'move' ? qtyText(q) + ': ' + nm(v.from) + ' → ' + nm(v.to) : mode === 'in' ? qtyText(q) + ' arrived with ' + nm(v.to) : mode === 'out' ? qtyText(q) + ' used by ' + nm(v.from) : nm(v.from) + ' count updated: ' + MERCH.map((m) => (q[m.id] || 0) + ' ' + m.name.toLowerCase()).join(', '));
+            if (v.note) ST.log[ST.log.length - 1].text += ' · ' + v.note; commit(); };
+        }
       }
       if (E.kind === 'budget' && evE) {
         const arr = (evE.budgetLines || []).slice(); const l = E.idx >= 0 ? arr[E.idx] : ['', '', 0, 0, 'Estimate', ''];
@@ -2179,7 +2560,7 @@ body{background:var(--bg);color:var(--fg)}
           F('badge', 'Exhibitor badge', 'chips', a.badge || 'Not needed', { options: ['Not needed', 'Not registered', 'Registered', 'Issued'].map((x) => ({ v: x, label: x })) }),
           F('travel', 'Travel', 'chips', a.travel || 'Self-booked', { options: ['Self-booked', 'Booked', 'Not needed'].map((x) => ({ v: x, label: x })) }),
           F('accom', 'Hotel', 'chips', a.accom || 'Self-booked', { options: ['Self-booked', 'Booked', 'Not needed'].map((x) => ({ v: x, label: x })) }),
-          F('scanner', 'SmartScan access', 'chips', !!a.scanner, { options: yn }), F('notes', 'Notes', 'text', a.notes)];
+          F('scanner', 'Badge scanner access', 'chips', !!a.scanner, { options: yn }), F('notes', 'Notes', 'text', a.notes)];
         save = () => { const v = vals(); if (!v.p) return err('Pick who’s attending.'); const row = Object.assign({}, a, { p: v.p, days: v.days, badge: v.badge, travel: v.travel, accom: v.accom, scanner: !!v.scanner, notes: v.notes }); if (E.idx >= 0) arr[E.idx] = row; else arr.push(row); this.patchEvent && this.patchEvent(evE.id, { attendees: arr }); done(); };
         if (E.idx >= 0) del = () => { arr.splice(E.idx, 1); this.patchEvent && this.patchEvent(evE.id, { attendees: arr }); done(); };
         delL = 'Remove from event';
@@ -2218,11 +2599,16 @@ body{background:var(--bg);color:var(--fg)}
         fields = [F('name', 'Item', 'text', m.name), F('total', 'Total stock', 'number', m.total), F('location', 'Where it’s kept', 'text', m.location)];
         save = () => { const v = vals(); if (!v.name) return err('Add the item name.'); arr[i] = Object.assign(m, { name: v.name, total: v.total || 0, location: v.location }); this.patchMaster && this.patchMaster({ MERCH: arr }); done(); };
       }
+      const AUDORDER = (f, list) => (f.options || []).map((o) => o.v).filter((v) => list.indexOf(v) >= 0);
       out.ed = { title, err: S.editErr || '', hasErr: !!S.editErr, canDel: !!del, delL, save: () => save && save(), del: () => del && del(), cancel: done,
-        fields: fields.map((f) => { const cur = f.type === 'chips' ? (chips[f.k] !== undefined ? chips[f.k] : f.value) : (dr[f.k] !== undefined ? dr[f.k] : f.value);
-          return { k: f.k, id: 'ed-' + f.k, label: f.label, value: String(cur === undefined ? '' : cur), isText: f.type === 'text', isDate: f.type === 'date', isNum: f.type === 'number', isArea: f.type === 'area', isChips: f.type === 'chips',
+        fields: fields.map((f) => { const multi = f.type === 'multi'; const cur = f.type === 'chips' || multi || f.type === 'upload' ? (chips[f.k] !== undefined ? chips[f.k] : f.value) : (dr[f.k] !== undefined ? dr[f.k] : f.value);
+          return { k: f.k, id: 'ed-' + f.k, label: f.label, value: String(cur === undefined ? '' : cur), isText: f.type === 'text', isDate: f.type === 'date', isNum: f.type === 'number', isArea: f.type === 'area' || f.type === 'list' || f.type === 'links', isChips: f.type === 'chips' || multi, isUpload: f.type === 'upload', accept: f.accept || 'image/*', hasFile: f.type === 'upload' && !!cur, isImg: f.type === 'upload' && /\.(jpe?g|png|webp|gif)(\?|$)|^\/_blob\//i.test(String(cur || '')), fileUrl: String(cur || ''), upMsg: S.upMsg || '', hasUpMsg: !!S.upMsg,
+            upload: (e) => { const file = e && e.target && e.target.files && e.target.files[0]; if (!file) return; if (typeof window === 'undefined' || !window.tuteUpload) { set({ editErr: 'Uploads work on the live Hub site.' }); return; }
+              set({ upMsg: 'Uploading ' + file.name + '…', editErr: '' }); window.tuteUpload(file).then((j) => set({ upMsg: '', editDraft: Object.assign({}, S.editDraft || {}, { [f.k]: j.url }) })).catch((er) => set({ upMsg: '', editErr: er.message || 'Upload failed' })); },
+            clear: () => set({ editDraft: Object.assign({}, chips, { [f.k]: '' }) }),
+            hint: f.hint || '', hasHint: !!f.hint, rows: String(f.type === 'list' || f.type === 'links' ? 6 : 4),
             change: (e) => { dr[f.k] = e.target.value; },
-            options: (f.options || []).map((o) => ({ label: o.label, bg: o.v === cur ? '#002E38' : '#FFFFFF', fg: o.v === cur ? '#FFFFFF' : '#002E38', pick: () => set({ editDraft: Object.assign({}, chips, { [f.k]: o.v }) }) })) }; }) };
+            options: (f.options || []).map((o) => { const on = multi ? cur.indexOf(o.v) >= 0 : String(o.v) === String(cur); return { label: (multi && on ? '✓ ' : '') + o.label, bg: on ? '#002E38' : '#FFFFFF', fg: on ? '#FFFFFF' : '#002E38', pick: () => set({ editDraft: Object.assign({}, chips, { [f.k]: multi ? (on ? cur.filter((x) => x !== o.v) : AUDORDER(f, cur.concat([o.v]))) : o.v }) }) }; }) }; }) };
       return out;
     })();
 
@@ -2247,7 +2633,7 @@ body{background:var(--bg);color:var(--fg)}
       kpis, months: MONTHS, terms, navTerms, attention: attention.slice(0, 6), hasAttention: attention.length > 0, attentionCount: String(attention.length),
       termPills: [['all', 'All terms'], ['1', 'Term 1'], ['2', 'Term 2']].map(([id, l]) => ({ label: l, bg: S.term === id ? '#002E38' : '#FFFFFF', fg: S.term === id ? '#FFFFFF' : '#002E38', pick: () => set({ term: id }) })),
       next: next ? { ...card(next), where: next.ev.venue + ', ' + next.ev.city, alerts: next.c.alerts.map((a) => ({ label: a.label })), brief: () => set({ screen: 'briefing', eventId: next.ev.id }) } : null, hasNext: !!next,
-      merchRows, merchHead: EVENTS.map((e) => ({ short: e.short })),
+      merchRows, merchTabs, merchTermL: mTerm.label + ' · ' + mTerm.sub, merchCols, merchHead: MEV.map((e) => ({ short: e.short })), merchIntro: STOCK ? 'Totals add up what’s in the office, with BDs and with suppliers (see Where the stock is). The event columns show what’s planned for upcoming events, and Remaining is what’s left once those are covered.' : 'Stock levels are entered once here. Each event only records how many it takes, so remaining stock updates everywhere automatically.',
       /* event */
       ev: { ...ev, summary: ev.summary || 'No summary yet - add two or three lines on what this event is and why we are there.', objective: ev.objective || 'To confirm', standL: st.number === 'n/a' ? (st.build || 'No stand') : isMissing(st.number) ? 'Stand TBC' : 'Stand ' + st.number, termL: TERMS[ev.term - 1].label + ' · ' + TERMS[ev.term - 1].sub },
       c: { ...c, statusP: pill(c.status), daysNum: c.past || c.live ? '' : String(c.du), daysWord: c.live ? 'Live now' : c.past ? 'Finished' : c.du === 1 ? 'day to go' : 'days to go', barColor: c.overdue ? '#E0367C' : '#1F9D57', hasAlerts: c.alerts.length > 0 },
@@ -2257,17 +2643,17 @@ body{background:var(--bg);color:var(--fg)}
       tabs, tab, details, sections, nextUp, hasNextUp: nextUp.length > 0,
       objectives: (ev.objectives || []).map((s) => ({ s })), proof: (ev.proof || []).map((p) => ({ s: p })), showInfo: (ev.showInfo || []).map((x) => ({ s: x })), hasShowInfo: !!(ev.showInfo && ev.showInfo.length), showLinks: ev.showLinks || [], hasShowLinks: !!(ev.showLinks && ev.showLinks.length), hasProof: !!(ev.proof && ev.proof.length), messaging: (ev.messaging || []).map((s) => ({ s, ph: s.startsWith('['), color: s.startsWith('[') ? '#951F51' : '#002E38' })),
       attendees, hasAttendees: attendees.length > 0, noAttendees: attendees.length === 0, attSummary,
-      logi, hasLogi: !!ev.logistics, noLogi: !ev.logistics,
-      standKv, standItems, signP, showChecklist, showRender, showSignoff, nowPhase, tplLabel: TPL.label || '', standLabel: TPL.standLabel || 'Stand', standPlan, hasPlan: standPlan.length > 0, bagItems, hasBag: bagItems.length > 0, bagExtra: st.bagExtra || '', bagMath, bagWarn, bagOk, render: st.render || '', hasRender: !!st.render, noRender: !st.render, hasStandItems: standItems.length > 0,
-      assets, hasAssets: assets.length > 0, noAssets: assets.length === 0, pipeline,
+      logi, hasLogi: true, noLogi: false,
+      standKv, standItems, signP, showChecklist, showRender: true, showSignoff, nowPhase, tplLabel: TPL.label || '', standLabel: TPL.standLabel || 'Stand', standPlan, hasPlan: standPlan.length > 0, bagItems, hasBag: bagItems.length > 0, bagExtra: st.bagExtra || '', bagMath, bagWarn, bagOk, render: st.render || '', hasRender: !!st.render, noRender: !st.render, hasStandItems: standItems.length > 0,
+      assets: assets.map((a, i) => Object.assign({}, a, { edit: (ED.assetEdits || [])[i] || (() => {}) })), hasAssets: assets.length > 0, noAssets: assets.length === 0, pipeline,
       evMerch, hasEvMerch: evMerch.length > 0,
       hubLinks: ld.hubLinks || [], hasHubLinks: !!(ld.hubLinks && ld.hubLinks.length),
-      leadKv, leadMethod: ld.method || 'To confirm', leadAccess, steps, questions, hasLead: !!ev.lead, noLead: !ev.lead,
+      leadKv, leadMethod: ld.method || 'To confirm', leadAccess, steps, questions, hasLead: true, noLead: false,
       taskRows, hasTaskRows: taskRows.length > 0, noTaskRows: taskRows.length === 0, taskKpis, taskFilters, catBtns,
       budgetKpis, lines: c.lines, hasLines: c.lines.length > 0, committedPct: pctOf(c.committed), actualPct: pctOf(c.actual), forecastPct: pctOf(c.forecast), forecastL: gbp(c.forecast),
-      R: { leads: R.leads || '', mqls: R.mqls || '', meetings: R.meetings || '', opps: R.opps || '', pipeline: R.pipeline || '', feedback: R.feedback || '', worked: R.worked || '', notWorked: R.notWorked || '', recs: R.recs || '', supplier: R.supplier || '', assetsLeft: R.assetsLeft || '' },
+      R: { leads: R.leads || '', mqls: R.mqls || '', meetings: R.meetings || '', opps: R.opps || '', pipeline: R.pipeline || '', feedback: R.feedback || '', worked: R.worked || '', notWorked: R.notWorked || '', recs: R.recs || '', supplier: R.supplier || '', leadList: R.leadList || '', d365: R.d365 || '', assetsLeft: R.assetsLeft || '' },
       setLeads: setR('leads'), setLeadList: setR('leadList'), setD365: setR('d365'), setMqls: setR('mqls'), setMeetings: setR('meetings'), setOpps: setR('opps'), setPipeline: setR('pipeline'), setFeedback: setR('feedback'), setWorked: setR('worked'), setNotWorked: setR('notWorked'), setRecs: setR('recs'), setSupplier: setR('supplier'), setAssetsLeft: setR('assetsLeft'),
-      cpl, spendL: gbp(c.actual), resMerch, preEvent: !c.past, resultsNote: c.past ? 'Event finished - record results below.' : 'Opens for input after ' + full(ev.end) + '. Cost per lead and merch used calculate automatically.',
+      cpl, spendL: gbp(c.actual), resMerch, preEvent: !c.past, fbRows, fbSum, hasFb: FB.length > 0, noFb: FB.length === 0, useFb, fbCanUse: FB.length > 0 && !!this.canEdit, resultsNote: c.past ? 'Event finished - record results below.' : 'Opens for input after ' + full(ev.end) + '. Cost per lead and merch used calculate automatically.',
       /* briefing */
       shipments, hasShipments: shipments.length > 0, teamTodos, hasTodos: teamTodos.length > 0, noTodos: teamTodos.length === 0, teamDone, hasTeamDone: teamDone.length > 0, myShipments, hasMyShipments: myShipments.length > 0, todoCount: String(teamTodos.length + myShipments.filter((x) => x.notReceived).length),
       briefTabs, bt, glance, collateralWith, briefPack, hasPrevBT: btIdx > 0, hasNextBT: btIdx < BT.length - 1, prevBT: btIdx > 0 ? briefTabs[btIdx - 1] : briefTabs[0], nextBT: btIdx < BT.length - 1 ? briefTabs[btIdx + 1] : briefTabs[0],
@@ -2278,6 +2664,8 @@ body{background:var(--bg);color:var(--fg)}
       attendees: attendees.map((a, i) => Object.assign({}, a, { canEdit: ED.canEdit, edit: (ED.attEdits[i] || {}).edit || (() => {}) })),
       taskRows: taskRows.map((t) => Object.assign({}, t, { canEdit: ED.canEdit, edit: ED.taskEdit(t.id.slice(ev.id.length + 1)) })),
       teams: teams.map((tm) => Object.assign({}, tm, { people: tm.people.map((p) => Object.assign({}, p, { canEdit: ED.canEdit, edit: ED.personEdit(p.pid) })) })),
+      bsShared: !!ev.briefShared, bsShareBorder: ev.briefShared ? '#1F9D57' : 'rgba(0,46,56,.12)', bsNotShared: !ev.briefShared, bsShareL: ev.briefShared ? 'Hide from BD team' : 'Share with BD team',
+      toggleShare: () => { if (this.canEdit && this.patchEvent) this.patchEvent(ev.id, { briefShared: !ev.briefShared }); },
       merchRows: merchRows.map((m) => Object.assign({}, m, { canEdit: ED.canEdit, edit: ED.merchEdit(m.id) }))
     };
   }
