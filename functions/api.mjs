@@ -45,7 +45,7 @@ async function loadAll(s) {
 function forTeam(all) {
   const master = Object.assign({}, all.master, { PIPELINE: [], REQUESTS: [], HISTORY: [] });
   const events = all.events.map((e) => {
-    if (!e.briefShared) return { id: e.id, name: e.name, short: e.short, start: e.start, end: e.end, venue: e.venue, city: e.city, type: e.type, region: e.region || "", booking: e.booking || "", template: e.template, settings: e.settings || [], phases: e.phases || [], logo: e.logo || '', attendees: (e.attendees || []).map((x) => ({ p: x.p })), feedbackBy: (e.feedback || []).map((f) => f.by), briefShared: false };
+    if (!e.briefShared) return { id: e.id, name: e.name, short: e.short, start: e.start, end: e.end, venue: e.venue, city: e.city, type: e.type, region: e.region || "", booking: e.booking || "", noFeedback: !!e.noFeedback, template: e.template, settings: e.settings || [], phases: e.phases || [], logo: e.logo || '', attendees: (e.attendees || []).map((x) => ({ p: x.p })), feedbackBy: (e.feedback || []).map((f) => f.by), briefShared: false };
     const c = JSON.parse(JSON.stringify(e));
     c.budgetLines = [];
     c.tasks = [];
@@ -53,6 +53,7 @@ function forTeam(all) {
     (c.attendees || []).forEach((a) => { a.notes = ""; });
     c.feedbackBy = (c.feedback || []).map((f) => f.by); delete c.feedback;
     c.contacts = (c.contacts || []).filter((k) => k.brief);
+    delete c.portals;
     return c;
   });
   return { master, events, state: all.state, rev: all.rev };
