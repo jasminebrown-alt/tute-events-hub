@@ -33,6 +33,10 @@ async function loadAll(s) {
   const state = (await s.get("state/shared", { type: "json" })) || {};
   const { blobs } = await s.list({ prefix: "events/" });
   const events = (await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })))).filter(Boolean);
+  // Post-event feedback from the BD team lives under feedback/<eventId>/<person>
+  const fb = (await s.list({ prefix: "feedback/" })).blobs;
+  const fbs = (await Promise.all(fb.map((b) => s.get(b.key, { type: "json" })))).filter(Boolean);
+  events.forEach((e) => { const mine = fbs.filter((f) => f.eventId === e.id); if (mine.length || !e.feedback) e.feedback = mine.sort((a, b) => String(a.at).localeCompare(String(b.at))); });
   const rev = (await s.get("rev")) || "0";
   return { master, events, state, rev };
 }
@@ -41,11 +45,14 @@ async function loadAll(s) {
 function forTeam(all) {
   const master = Object.assign({}, all.master, { PIPELINE: [], REQUESTS: [], HISTORY: [] });
   const events = all.events.map((e) => {
+    if (!e.briefShared) return { id: e.id, name: e.name, short: e.short, start: e.start, end: e.end, venue: e.venue, city: e.city, type: e.type, template: e.template, settings: e.settings || [], phases: e.phases || [], logo: e.logo || '', attendees: (e.attendees || []).map((x) => ({ p: x.p })), feedbackBy: (e.feedback || []).map((f) => f.by), briefShared: false };
     const c = JSON.parse(JSON.stringify(e));
     c.budgetLines = [];
     c.tasks = [];
     if (c.lead) delete c.lead.hubLinks;
     (c.attendees || []).forEach((a) => { a.notes = ""; });
+    c.feedbackBy = (c.feedback || []).map((f) => f.by); delete c.feedback;
+    c.contacts = (c.contacts || []).filter((k) => k.brief);
     return c;
   });
   return { master, events, state: all.state, rev: all.rev };
@@ -64,18 +71,39 @@ function merge(target, patch) {
 }
 
 const slug = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
-const rowId = (p) => slug(p.name) + "-" + (p.date || "tbc");
+const rowId = (p) => p.rid || (slug(p.name) + "-" + (p.date || "tbc"));
 const okPath = (p) => p === "state/shared" || p === "master/data" || /^events\/[A-Za-z0-9_-]{1,60}$/.test(p);
 
 export default async (req) => {
   const route = new URL(req.url).pathname.replace(/^\/api\/?/, "");
   if (!env("MARKETING_PASSWORD") || !env("TEAM_PASSWORD")) return json({ error: "Passwords not set up yet. Add MARKETING_PASSWORD and TEAM_PASSWORD in Netlify, then redeploy." }, 503);
+  // Uploaded images and PDFs: served by their random id (hard to guess, so links can sit in <img> tags).
+  const fm = route.match(/^file\/([a-f0-9]{24}\.(?:jpg|png|webp|gif|pdf))$/);
+  if (fm && req.method === "GET") {
+    const got = await store().getWithMetadata("files/" + fm[1], { type: "arrayBuffer" });
+    if (!got) return new Response("Not found", { status: 404 });
+    return new Response(got.data, { headers: { "content-type": (got.metadata && got.metadata.type) || "application/octet-stream", "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" } });
+  }
   const role = roleOf(req);
   if (!role) { await new Promise((r) => setTimeout(r, 600)); return json({ error: "Wrong password" }, 401); }
   const s = store();
   await ensureSeeded(s);
 
   if (route === "login") return json({ role });
+  if (route === "upload") {
+    if (req.method !== "POST") return json({ error: "POST only" }, 405);
+    if (role !== "marketing") return json({ error: "Read-only login" }, 403);
+    const type = (req.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "application/pdf": "pdf" };
+    if (!EXT[type]) return json({ error: "Upload a JPG, PNG, WebP, GIF or PDF." }, 400);
+    const buf = await req.arrayBuffer();
+    if (!buf.byteLength) return json({ error: "That file is empty." }, 400);
+    if (buf.byteLength > 4.5 * 1024 * 1024) return json({ error: "That file is over 4.5 MB. Try a smaller version." }, 413);
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((x) => x.toString(16).padStart(2, "0")).join("") + "." + EXT[type];
+    const name = decodeURIComponent(req.headers.get("x-file-name") || "").slice(0, 160);
+    await s.set("files/" + id, buf, { metadata: { type, name, at: new Date().toISOString() } });
+    return json({ ok: true, url: "/api/file/" + id, name, type });
+  }
   if (route === "rev") return json({ rev: (await s.get("rev")) || "0" });
   if (route === "all") { const all = await loadAll(s); return json(role === "marketing" ? all : forTeam(all)); }
 
@@ -91,6 +119,25 @@ export default async (req) => {
       return { name: r.name, date: r.date || "", dateNote: r.dateNote || "", bd: r.bd || "", location: r.location || "", status, why, submittedAt: r.submittedAt || "", submittedBy: r.submittedBy || "" };
     });
     return json({ requests: out });
+  }
+  if (route === "feedback") {
+    if (req.method !== "POST") return json({ error: "POST only" }, 405);
+    let b; try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
+    const t = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+    const num = (v) => { const n = parseInt(String(v || "").replace(/[^0-9]/g, ""), 10); return isNaN(n) ? "" : Math.min(n, 9999); };
+    const pick = (v, list) => (list.includes(v) ? v : "");
+    const id = t(b.eventId, 60), by = t(b.by, 10);
+    if (!/^[A-Za-z0-9_-]+$/.test(id) || !(await s.get("events/" + id))) return json({ error: "Pick the event." }, 400);
+    const master = await s.get("master/data", { type: "json" });
+    if (!/^[a-z0-9]+$/i.test(by) || !(master && master.PEOPLE && master.PEOPLE[by])) return json({ error: "Pick your name." }, 400);
+    const rec = { eventId: id, by, at: new Date().toISOString(),
+      rating: num(b.rating) && Math.min(5, num(b.rating)), audience: pick(b.audience, ["Right people", "Mixed", "Mostly not our audience"]), footfall: pick(b.footfall, ["Busy", "Steady", "Quiet"]),
+      conversations: num(b.conversations), leads: num(b.leads), hot: num(b.hot), meetings: num(b.meetings), opps: num(b.opps),
+      d365: pick(b.d365, ["All added", "Some added", "Not yet"]), rebook: pick(b.rebook, ["Yes", "Maybe", "No"]),
+      leadNames: t(b.leadNames, 3000), worked: t(b.worked, 2000), improve: t(b.improve, 2000), competitors: t(b.competitors, 1000), kit: t(b.kit, 1000) };
+    await s.setJSON("feedback/" + id + "/" + by, rec);
+    await s.set("rev", String(Date.now()));
+    return json({ ok: true });
   }
   if (route === "request") {
     if (req.method !== "POST") return json({ error: "POST only" }, 405);
