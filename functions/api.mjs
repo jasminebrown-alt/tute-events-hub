@@ -121,6 +121,64 @@ export default async (req) => {
     });
     return json({ requests: out });
   }
+  // ---- Partnerships team: merch they've sent on, or their current count ----
+  if (route === "merch") {
+    if (req.method !== "POST") return json({ error: "POST only" }, 405);
+    let b; try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
+    const t = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+    const by = t(b.by, 10), act = t(b.act, 10), to = t(b.to, 40), note = t(b.note, 200), q0 = b.q && typeof b.q === "object" ? b.q : {};
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const cur = await s.getWithMetadata("master/data", { type: "json" });
+      const m = cur && cur.data ? cur.data : {}; const P = m.PEOPLE || {}; const MER = m.MERCH || [];
+      if (!P[by]) return json({ error: "Pick your name first." }, 400);
+      const q = {}; MER.forEach((x) => { const n = parseInt(q0[x.id], 10); if (!isNaN(n) && n >= 0 && n < 100000) q[x.id] = n; });
+      const ST = JSON.parse(JSON.stringify(m.STOCK || { holders: [{ id: "office", name: "Office" }], held: { office: {} }, log: [] }));
+      ST.held = ST.held || {}; ST.holders = ST.holders || [];
+      const ensure = (id) => { if (!ST.holders.some((h) => h.id === id)) ST.holders.push({ id, name: id === "office" ? "Office" : P[id].name, note: "" }); return ST.held[id] || (ST.held[id] = {}); };
+      const mine = ensure(by); const nm = (h) => (h === "office" ? "Office" : P[h] ? P[h].name : h);
+      const txt = (o) => MER.filter((x) => o[x.id]).map((x) => o[x.id] + " " + x.name.toLowerCase()).join(", ");
+      let text = "";
+      if (act === "count") { MER.forEach((x) => { if (q[x.id] !== undefined) mine[x.id] = q[x.id]; }); text = P[by].name + " updated their count: " + MER.map((x) => (Number(mine[x.id]) || 0) + " " + x.name.toLowerCase()).join(", ") + " (their update)"; }
+      else if (act === "send") {
+        if (!(to === "office" || P[to]) || to === by) return json({ error: "Pick who you sent it to." }, 400);
+        const send = {}; MER.forEach((x) => { if (q[x.id] > 0) send[x.id] = q[x.id]; });
+        if (!Object.keys(send).length) return json({ error: "Add how many you sent." }, 400);
+        const short = MER.filter((x) => send[x.id] > (Number(mine[x.id]) || 0));
+        if (short.length) return json({ error: "You’re down as having " + short.map((x) => (Number(mine[x.id]) || 0) + " " + x.name.toLowerCase()).join(", ") + ". Use Update my count first if that’s wrong." }, 400);
+        const theirs = ensure(to); MER.forEach((x) => { if (send[x.id]) { mine[x.id] = (Number(mine[x.id]) || 0) - send[x.id]; theirs[x.id] = (Number(theirs[x.id]) || 0) + send[x.id]; } });
+        text = txt(send) + ": " + P[by].name + " → " + nm(to) + " (sent, logged by " + P[by].name.split(" ")[0] + ")";
+      } else return json({ error: "Bad request" }, 400);
+      if (note) text += " · " + note;
+      ST.log = (ST.log || []).concat([{ at: new Date().toISOString(), text }]).slice(-60);
+      const res = await s.setJSON("master/data", Object.assign({}, m, { STOCK: ST }), cur && cur.etag ? { onlyIfMatch: cur.etag } : {});
+      if (!res || res.modified !== false) { await s.set("rev", String(Date.now())); return json({ ok: true }); }
+    }
+    return json({ error: "Busy, try again" }, 409);
+  }
+  // ---- Partnerships team: confirm stand kit arrived, or say they've sent it on ----
+  if (route === "kit") {
+    if (req.method !== "POST") return json({ error: "POST only" }, 405);
+    let b; try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
+    const t = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+    const id = t(b.id, 120), by = t(b.by, 10), act = t(b.act, 10), to = t(b.to, 40), note = t(b.note, 200);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const cur = await s.getWithMetadata("master/data", { type: "json" });
+      const m = cur && cur.data ? cur.data : {}; const P = m.PEOPLE || {};
+      if (!P[by]) return json({ error: "Pick your name first." }, 400);
+      const ST = JSON.parse(JSON.stringify(m.STOCK || {})); const k = (ST.kit || []).find((x) => x.id === id);
+      if (!k || k.holder !== by) return json({ error: "That kit isn’t down as being with you. Tell Marketing." }, 400);
+      const today = new Date().toISOString().slice(0, 10); const nm = (h) => (h === "office" ? "Office" : P[h] ? P[h].name : h); let text = "";
+      if (act === "arrived") { if (!k.transit) return json({ ok: true }); k.transit = false; k.transitFrom = ""; k.since = today; text = k.name + " arrived with " + P[by].name + " (confirmed by them)"; }
+      else if (act === "send") { if (!(to === "office" || P[to]) || to === by) return json({ error: "Pick who you sent it to." }, 400); k.transitFrom = by; k.transit = true; k.holder = to; k.since = today; text = k.name + ": " + P[by].name + " → " + nm(to) + " (courier sent, logged by " + P[by].name.split(" ")[0] + ")"; }
+      else return json({ error: "Bad request" }, 400);
+      if (note) text += " · " + note;
+      ST.log = (ST.log || []).concat([{ at: new Date().toISOString(), text }]).slice(-60);
+      const next = Object.assign({}, m, { STOCK: ST });
+      const res = await s.setJSON("master/data", next, cur && cur.etag ? { onlyIfMatch: cur.etag } : {});
+      if (!res || res.modified !== false) { await s.set("rev", String(Date.now())); return json({ ok: true }); }
+    }
+    return json({ error: "Busy, try again" }, 409);
+  }
   if (route === "feedback") {
     if (req.method !== "POST") return json({ error: "POST only" }, 405);
     let b; try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
