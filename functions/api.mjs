@@ -130,11 +130,20 @@ export default async (req) => {
     if (!/^[A-Za-z0-9_-]+$/.test(id) || !(await s.get("events/" + id))) return json({ error: "Pick the event." }, 400);
     const master = await s.get("master/data", { type: "json" });
     if (!/^[a-z0-9]+$/i.test(by) || !(master && master.PEOPLE && master.PEOPLE[by])) return json({ error: "Pick your name." }, 400);
-    const rec = { eventId: id, by, at: new Date().toISOString(),
-      rating: num(b.rating) && Math.min(5, num(b.rating)), audience: pick(b.audience, ["Right people", "Mixed", "Mostly not our audience"]), footfall: pick(b.footfall, ["Busy", "Steady", "Quiet"]),
-      conversations: num(b.conversations), leads: num(b.leads), hot: num(b.hot), meetings: num(b.meetings), opps: num(b.opps),
-      d365: pick(b.d365, ["All added", "Some added", "Not yet"]), rebook: pick(b.rebook, ["Yes", "Maybe", "No"]),
-      leadNames: t(b.leadNames, 3000), worked: t(b.worked, 2000), improve: t(b.improve, 2000), competitors: t(b.competitors, 1000), kit: t(b.kit, 1000) };
+    const scale = (v) => { const n = num(v); return n ? Math.min(5, Math.max(1, n)) : ""; };
+    const SPOKE = ["Headteachers / senior leaders", "SENDCOs / inclusion leads", "Attendance leads", "Local authority / commissioning teams", "Alternative provision leaders", "Teachers / school staff", "MAT / trust leaders", "Other"];
+    const rec = { eventId: id, by, at: new Date().toISOString(), form: 2,
+      with: t(b.with, 300),
+      relevance: scale(b.relevance), spokeTo: (Array.isArray(b.spokeTo) ? b.spokeTo : []).filter((x) => SPOKE.includes(x)), spokeOther: t(b.spokeOther, 200),
+      engagement: scale(b.engagement),
+      capture: pick(b.capture, ["Badge scanner / digital lead capture", "Printed lead capture forms", "Other"]),
+      leads: num(b.leads), hot: num(b.hot),
+      promising: pick(b.promising, ["Yes, several", "Yes, one or two", "Not at this event"]),
+      rating: scale(b.rating),
+      rebook: pick(b.rebook, ["Yes – definitely", "Yes – but with changes", "Maybe – depends on cost/package", "Probably not"]),
+      why: t(b.why, 2000), improve: t(b.improve, 2000), competitors: t(b.competitors, 1000), worked: t(b.worked, 2000), missing: t(b.missing, 2000), other: t(b.other, 2000),
+      merchSelf: pick(b.merchSelf, ["Yes", "No - managed by Creative Spaces Design"]), kit: t(b.kit, 1000) };
+    if (!rec.relevance || !rec.engagement || !rec.rating || !rec.rebook || !rec.capture || !rec.promising || !rec.merchSelf || !rec.spokeTo.length || rec.leads === "" || rec.hot === "" || !rec.why || !rec.improve) return json({ error: "Please answer all the questions marked *." }, 400);
     await s.setJSON("feedback/" + id + "/" + by, rec);
     await s.set("rev", String(Date.now()));
     return json({ ok: true });
