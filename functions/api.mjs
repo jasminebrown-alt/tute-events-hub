@@ -112,7 +112,12 @@ export default async (req) => {
   if (route === "requests") {
     const all = await loadAll(s);
     const dec = (all.state && all.state.decide) || {}, ps = (all.state && all.state.pipeStatus) || {};
-    const out = ((all.master && all.master.REQUESTS) || []).map((r) => {
+    const P = (all.master && all.master.PEOPLE) || {};
+    const fromPipe = ((all.master && all.master.PIPELINE) || []).filter((r) => r.source === "Partnerships request").map((r) => {
+      const who = P[r.bd] || Object.values(P).find((x) => x.init && x.init.toUpperCase() === String(r.bd || "").toUpperCase()) || null;
+      return Object.assign({}, r, { bd: who ? who.init : (r.bd || ""), submittedBy: r.submittedBy || (who ? who.name : ""), submittedAt: r.submittedAt || r.addedAt || "" });
+    });
+    const out = ((all.master && all.master.REQUESTS) || []).concat(fromPipe).map((r) => {
       const id = rowId(r), d = dec[id] || {};
       let status = ps[id] || r.status || "To decide", why = "";
       if (d.d === "approved") status = "Approved";
